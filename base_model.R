@@ -1,105 +1,15 @@
 library(shiny)
 library(plotly)
 
-
-normal_limits <- c(-2.5, 2.5)
-splitting_limits <- c(-1, 3) #changes the in-app sliders but not the 3d grid
-frame_ms <- 35 #should change the plot framerate according to miss AI. 35 seems to look slightly smoother than 40 for me while 30 makes it worse.
-max_control_step <- 0.005 #should have something to do with the tracking over the surface according to miss AI
+#----------Adjustable parameters----------
+normal_limits <- c(-3, 3)
+splitting_limits <- c(-1, 3)
 default_labels <- list(a = "Normal axis (a)", b = "Splitting axis (b)", response = "Response (x)")
+frame_ms <- 35 #framerate (allegedly)
+max_control_step <- 0.005 #smaller value should lead to better tracking over the surface according to miss AI
+#----------end----------
 
-
-#picks a random, fully saturated and maximally bright, color.
-random_colour <- function() hsv(runif(1), 1, 1)
-
-# Find the next lowest available person number (important for after having deleted persons).
-next_available_number <- function(ids) {
-  used <- as.integer(ids)
-  number <- 1L
-  while (number %in% used) number <- number+1L
-  return(number)
-}
-
-# Function for creating the person selection list; attaching the right name to the right underlying ID.
-person_choices <- function(records) {
-  index <- order(as.integer(records$id))
-  return(setNames(records$id[index], records$name[index]))
-}
-
-# For finding the equilibria of the cusp, for a given a and b parameters.
-real_roots <- function(a, b) {
-  roots <- polyroot(c(-a, -b, 0, 1)) #finds roots of the first derivative
-  return(sort(Re(roots[abs(Im(roots)) < 1e-6]))) #Imaginary part need to stay otherwise more roots are found (I think)
-}
-
-# Returns next position at a stable equilibrium for a person
-choose_equilibrium <- function(a, b, previous_x) {
-  roots <- real_roots(a, b)
-  candidates <- roots[3*roots^2-b >= -1e-7] #if second derivative at roots is bigger than 0...; slightly negative to allow for rounding error apparently.
-  return(candidates[which.min(abs(candidates - previous_x))])
-}
-
-
-
-x_grid <- seq(-2.6, 2.6, length.out = 181)
-b_grid <- seq(-1, 3, length.out = 111) #check length.out values here and above; might be arbitrary.
-A <- outer(x_grid, b_grid, function(x, b) x^3-b*x) #creates a matrix of the slope at x for a value of b, with a = 0. Perhaps this is for finding the required A to make the first derivative 0?
-B <- matrix(rep(b_grid, each = length(x_grid)), nrow = length(x_grid))
-X <- matrix(rep(x_grid, times = length(b_grid)), nrow = length(x_grid))
-stability <- 3*X^2-B #second derivative of the cusp function; checks whether a certain x value is stable or unstable for a given b.
-X_stable <- X
-X_unstable <- X
-X_stable[stability < 0 | abs(A) > 3.5] <- NA_real_ #why abs(A) here though and on the next line? also shouldn't stability be > 0 for a stable equilibrium?
-X_unstable[stability >= 0 | abs(A) > 3.5] <- NA_real_ #should this be > instead of >=?
-
-#for creating black line separating stable from unstable area in plot:
-fold_x <- seq(-1, 1, length.out = 300)
-fold_a <- -2*fold_x^3
-fold_b <- 3*fold_x^2
-#end
-
-           
-#Next three functions perhaps for the plotly part?
-figure_geometry <- function(a, b, x) {
-  h <- 0.30
-  w <- 0.09
-  return(list(a = c(a, a, NA, a-w, a+w, NA, a, a-w, NA, a, a+w), b = rep(b, 11),
-       x = c(x+h*0.82, x+h*0.35, NA, x+h*0.62, x+h*0.62,
-             NA, x+h*0.35, x, NA, x+h*0.35, x), head_x = x+h))
-}       
-hover_coordinates <- function(labels) {
-  safe <- lapply(labels, function(s) as.character(htmltools::htmlEscape(s)))
-  return(paste0(safe$a, ": %{x:.3f}<br>", safe$b, ": %{y:.3f}<br>", safe$response, ": %{z:.3f}"))
-}            
-anchor_hover <- function(name, labels) {
-  return(paste0(as.character(htmltools::htmlEscape(name)), "<br>", hover_coordinates(labels), "<extra></extra>"))
-}
-#end of mysterious three functions
-
-                 
-#t.b.d. what this does                
-person_traces <- function(person, position, selected = FALSE, labels = default_labels) {
-  a <- position$a
-  b <- position$b
-  x <- position$x
-  g <- figure_geometry(a, b, x)
-  list(
-    list(type = "scatter3d", mode = "lines", x = g$a, y = g$b, z = g$x,
-         line = list(color = person$color, width = if (selected) 8 else 5),
-         name = person$name, showlegend = FALSE, hoverinfo = "skip"),
-    list(type = "scatter3d", mode = "markers+text", x = list(a), y = list(b), z = list(g$head_x),
-         marker = list(color = person$color, size = if (selected) 7 else 5),
-         text = list(person$name), textposition = "top center",
-         textfont = list(color = person$color, size = 12), name = person$name,
-         showlegend = FALSE, hovertemplate = paste0(person$name, "<extra></extra>")),
-    list(type = "scatter3d", mode = "markers", x = list(a), y = list(b), z = list(x),
-         marker = list(color = person$color, size = 4), name = person$name,
-         showlegend = FALSE, hovertemplate = anchor_hover(person$name, labels)))
-}
-#end
-
-
-#text editing part for the app I believe                     
+#----------Figure text----------                   
 ui <- fluidPage(
   tags$head(tags$style(HTML("body { background: #f8fafc; color: #172033; }
     .well { background: white; border-color: #e2e8f0; }
@@ -130,10 +40,101 @@ ui <- fluidPage(
       p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
     mainPanel(plotlyOutput("cusp", height = "720px"),
               p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."))))
+#----------end----------
+
+
+#----------Important functions I can understand----------
+random_colour <- function() {
+  return(hsv(runif(1), 1, 1)) #random hue, fully saturated, and full brightness
+} 
+
+# Find the next lowest available person number
+next_available_number <- function(ids) {
+  used <- as.integer(ids)
+  number <- 1L
+  while (number %in% used) number <- number+1L
+  return(number)
+}
+
+# Function for creating the person selection list; keeps the person numbers in the drop-down menu ordered from low to high.
+person_choices <- function(records) {
+  index <- order(as.integer(records$id))
+  return(setNames(records$id[index], records$name[index]))
+}
+
+# For finding the equilibria of the cusp, for a given a and b parameters.
+real_roots <- function(a, b) {
+  roots <- polyroot(c(-a, -b, 0, 1))
+  return(sort(Re(roots[abs(Im(roots)) < 1e-6]))) #Imaginary part need to stay otherwise more roots are found (I think)
+}
+
+# Returns next position, always at a stable equilibrium, for a person
+choose_equilibrium <- function(a, b, previous_x) {
+  roots <- real_roots(a, b)
+  candidates <- roots[3*roots^2-b >= -1e-7] #if second derivative at roots is bigger than 0...; slightly negative to allow for rounding error according to AI.
+  return(candidates[which.min(abs(candidates - previous_x))])
+}
+
+#for drawing 3d persons
+figure_geometry <- function(a, b, x) {
+  h <- 0.30 #person height
+  w <- 0.09 #person width
+  return(list(a = c(a, a, NA, a-w, a+w, NA, a, a-w, NA, a, a+w), b = rep(b, 11),
+              x = c(x+h*0.82, x+h*0.35, NA, x+h*0.62, x+h*0.62,
+                    NA, x+h*0.35, x, NA, x+h*0.35, x), head_x = x+h))
+}
+person_traces <- function(person, position, selected = FALSE, labels = default_labels) {
+  a <- position$a
+  b <- position$b
+  x <- position$x
+  g <- figure_geometry(a, b, x)
+  return(list(
+    list(type = "scatter3d", mode = "lines", x = g$a, y = g$b, z = g$x,
+         line = list(color = person$color, width = if (selected) 8 else 5),
+         name = person$name, showlegend = FALSE, hoverinfo = "skip"),
+    list(type = "scatter3d", mode = "markers+text", x = list(a), y = list(b), z = list(g$head_x),
+         marker = list(color = person$color, size = if (selected) 7 else 5),
+         text = list(person$name), textposition = "top center",
+         textfont = list(color = person$color, size = 12), name = person$name,
+         showlegend = FALSE, hovertemplate = paste0(person$name, "<extra></extra>")),
+    list(type = "scatter3d", mode = "markers", x = list(a), y = list(b), z = list(x),
+         marker = list(color = person$color, size = 4), name = person$name,
+         showlegend = FALSE, hovertemplate = anchor_hover(person$name, labels))))
+}
 #end
 
-                     
-#the most mysterious function the world has ever seen 
+
+#according to AI this is for the text on hovering over the cusp
+hover_coordinates <- function(labels) {
+  safe <- lapply(labels, function(s) as.character(htmltools::htmlEscape(s)))
+  return(paste0(safe$a, ": %{x:.3f}<br>", safe$b, ": %{y:.3f}<br>", safe$response, ": %{z:.3f}"))
+}
+#and this for hovering over persons
+anchor_hover <- function(name, labels) {
+  return(paste0(as.character(htmltools::htmlEscape(name)), "<br>", hover_coordinates(labels), "<extra></extra>"))
+}
+#----------end----------
+
+
+#----------Setup figure planes and line----------
+x_grid <- seq(normal_limits[1] - .1, normal_limits[2] + .1, length.out = 181) #length.out values here arbitrary; chosen by AI
+b_grid <- seq(splitting_limits[1], splitting_limits[2], length.out = 111)
+A <- outer(x_grid, b_grid, function(x, b) x^3-b*x) #required A's to make the first derivative = 0
+B <- matrix(rep(b_grid, each = length(x_grid)), nrow = length(x_grid))
+X <- matrix(rep(x_grid, times = length(b_grid)), nrow = length(x_grid))
+stability <- 3*X^2-B #second derivative of the cusp function; checks whether a certain x value is stable or unstable for a given b.
+X_stable <- X
+X_unstable <- X
+X_stable[stability <= 0] <- NA_real_ 
+X_unstable[stability >= 0] <- NA_real_
+
+#For black line separating stable from unstable plane
+fold_x <- seq(-1, 1, length.out = 300)
+fold_a <- -2*fold_x^3
+fold_b <- 3*fold_x^2
+#----------end----------
+
+#----------The big app function, annotated by AI (I don't get it)----------
 server <- function(input, output, session) {
   
   # ====================================================================
@@ -560,8 +561,8 @@ server <- function(input, output, session) {
         uirevision = "keep-camera", showlegend = FALSE,
         scene = list(
           uirevision = "keep-camera",
-          xaxis = list(title = list(text = default_labels$a), range = c(-3.5, 3.5)),
-          yaxis = list(title = list(text = default_labels$b), range = c(-1, 3)),
+          xaxis = list(title = list(text = default_labels$a), range = c(normal_limits[1], normal_limits[2])),
+          yaxis = list(title = list(text = default_labels$b), range = c(splitting_limits[1], splitting_limits[2])),
           zaxis = list(title = list(text = default_labels$response), range = c(-2.6, 3)),
           aspectmode = "manual", aspectratio = list(x = 1.25, y = 1, z = 1),
           camera = list(eye = list(x = 1.6, y = 1.6, z = 1.1))
@@ -646,6 +647,6 @@ server <- function(input, output, session) {
     update_plot("restyle", list(hovertemplate = templates), anchors)
   }, ignoreInit = TRUE)
 }
-#end of BIG mysterious function
-                     
+#----------end----------
+
 shinyApp(ui, server)
