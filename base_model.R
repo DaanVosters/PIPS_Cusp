@@ -5,7 +5,7 @@ library(plotly)
 normal_limits <- c(-3, 3)
 splitting_limits <- c(-1, 3)
 default_labels <- list(a = "Normal axis (a)", b = "Splitting axis (b)", response = "Response (x)")
-frame_ms <- 35 #framerate (allegedly)
+frame_ms <- 25 #framerate, lower = smoother but more demanding
 max_control_step <- 0.005 #smaller value should lead to better tracking over the surface according to miss AI
 #----------end----------
 
@@ -117,8 +117,8 @@ anchor_hover <- function(name, labels) {
 
 
 #----------Setup figure planes and line----------
-x_grid <- seq(normal_limits[1] - .1, normal_limits[2] + .1, length.out = 181) #length.out values here arbitrary; chosen by AI
-b_grid <- seq(splitting_limits[1], splitting_limits[2], length.out = 111)
+x_grid <- seq(normal_limits[1] - .1, normal_limits[2] + .1, length.out = 100) #length.out values here and next line very important for framerate
+b_grid <- seq(splitting_limits[1], splitting_limits[2], length.out = 66)
 A <- outer(x_grid, b_grid, function(x, b) x^3-b*x) #required A's to make the first derivative = 0
 B <- matrix(rep(b_grid, each = length(x_grid)), nrow = length(x_grid))
 X <- matrix(rep(x_grid, times = length(b_grid)), nrow = length(x_grid))
