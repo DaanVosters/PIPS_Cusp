@@ -648,5 +648,3 @@ server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 }
 #----------end----------
-
-shinyApp(ui, server)
