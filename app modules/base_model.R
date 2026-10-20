@@ -139,7 +139,7 @@ fold_b <- 3*fold_x^2
 
 #----------The big app function, annotated by AI (I don't get it)----------
 server <- function(input, output, session) {
-  
+   dataAnalysisServer("analysis")
   # ====================================================================
   # 1. State: target controls, current positions, and selected people
   # ====================================================================
