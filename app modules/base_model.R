@@ -1,7 +1,7 @@
 library(shiny)
 library(plotly)
 
-source("data_analysis_feature.R") #loading the data-analysis feature
+source("data_analysis_module.R") #loading the data-analysis feature
 
 #----------Adjustable parameters----------
 normal_limits <- c(-3, 3)

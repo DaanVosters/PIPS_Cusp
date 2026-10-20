@@ -42,8 +42,16 @@ da_expanded_range <- function(values) {
   r + c(-padding, padding)
 }
 
+# Check if variables/responses are standardised
+da_axis_label <- function(name, standardised) {
+  if (isTRUE(standardised)) paste0(name, " (standardised)") else name
+}
 # Builds the 3D plot: cusp surface, fold curve, and respondent points.
-da_plot <- function(points, show_observed, show_projected) {
+da_plot <- function(points, show_observed, show_projected, var_names, standardised = TRUE) {
+  # Variable names are copied onto the graph
+  label_a <- da_axis_label(var_names[2], standardised)  # alpha predictor
+  label_b <- da_axis_label(var_names[3], standardised)  # beta predictor
+  label_x <- da_axis_label(var_names[1], standardised)  # response / state
   ar <- da_expanded_range(points$alpha)
   br <- da_expanded_range(c(points$beta, 0))
   # Roots at the observed controls, used to size the vertical axis.
@@ -67,11 +75,13 @@ da_plot <- function(points, show_observed, show_projected) {
   p <- plotly::add_surface(p, x = A, y = B, z = stable,
                            name = "Stable equilibria", opacity = 0.55, showscale = FALSE,
                            colorscale = list(c(0, "#93c5fd"), c(1, "#93c5fd")),
-                           hovertemplate = "alpha: %{x:.3f}<br>beta: %{y:.3f}<br>state: %{z:.3f}<extra>Stable</extra>")
+                           hovertemplate = paste0(label_a, ": %{x:.3f}<br>", label_b, ": %{y:.3f}<br>",
+                                                  label_x, ": %{z:.3f}<extra>Stable</extra>"))
   p <- plotly::add_surface(p, x = A, y = B, z = unstable,
                            name = "Unstable equilibria", opacity = 0.25, showscale = FALSE,
                            colorscale = list(c(0, "#fdba74"), c(1, "#fdba74")),
-                           hovertemplate = "alpha: %{x:.3f}<br>beta: %{y:.3f}<br>state: %{z:.3f}<extra>Unstable</extra>")
+                           hovertemplate = paste0(label_a, ": %{x:.3f}<br>", label_b, ": %{y:.3f}<br>",
+                                                  label_x, ": %{z:.3f}<extra>Unstable</extra>"))
   
   # Fold curve: alpha = -2 x^3, beta = 3 x^2
   f <- seq(-sqrt(max(br[2], 0) / 3), sqrt(max(br[2], 0) / 3), length.out = 400)
@@ -83,26 +93,27 @@ da_plot <- function(points, show_observed, show_projected) {
                          type = "scatter3d", mode = "lines", name = "Folds",
                          line = list(color = "#334155", width = 5), hoverinfo = "skip")
   
-  hover <- paste0("CSV row ", points$row, "<br>Raw response: ",
-                  signif(points$response, 4), "<br>alpha: ", signif(points$alpha, 4),
-                  "<br>beta: ", signif(points$beta, 4))
+  hover <- paste0("CSV row ", points$row,
+                  "<br>", var_names[1], ": ", signif(points$response, 4),
+                  "<br>", label_a, ": ", signif(points$alpha, 4),
+                  "<br>", label_b, ": ", signif(points$beta, 4))
   if (show_observed) {
     p <- plotly::add_trace(p, x = points$alpha, y = points$beta,
                            z = points$state, type = "scatter3d", mode = "markers",
                            name = "Observed (transformed)", marker = list(color = "#475569", size = 4),
-                           text = hover, hovertemplate = "%{text}<br>state: %{z:.3f}<extra>Observed</extra>")
+                           text = hover, hovertemplate = paste0("%{text}<br>", label_x, ": %{z:.3f}<extra>Observed</extra>"))
   }
   if (show_projected) {
     p <- plotly::add_trace(p, x = points$alpha, y = points$beta,
                            z = points$stable_projection, type = "scatter3d", mode = "markers",
                            name = "Nearest stable projection", marker = list(color = "#7c3aed", size = 5),
-                           text = hover, hovertemplate = "%{text}<br>state: %{z:.3f}<extra>Projected</extra>")
+                           text = hover, hovertemplate = paste0("%{text}<br>", label_x, ": %{z:.3f}<extra>Projected</extra>"))
   }
   p <- plotly::layout(p, uirevision = "analysis-camera",
                       scene = list(
-                        xaxis = list(title = "Estimated normal control (alpha)", range = ar),
-                        yaxis = list(title = "Estimated splitting control (beta)", range = br),
-                        zaxis = list(title = "Canonical response state", range = zr)),
+                              xaxis = list(title = da_axis_label(var_names[2], standardised), range = ar),
+      yaxis = list(title = da_axis_label(var_names[3], standardised), range = br),
+      zaxis = list(title = da_axis_label(var_names[1], standardised), range = zr)),
                       margin = list(l = 0, r = 0, b = 0, t = 20))
   plotly::config(p, displaylogo = FALSE)
 }
@@ -252,8 +263,8 @@ dataAnalysisServer <- function(id) {
     
     output$surface <- plotly::renderPlotly({
       r <- result(); shiny::req(r)
-      da_plot(r$coordinates, isTRUE(input$observed), isTRUE(input$projected))
-    })
+      da_plot(r$coordinates, isTRUE(input$observed), isTRUE(input$projected), r$columns)
+      })
     
     output$coordinates <- shiny::renderTable({
       shiny::req(result())
