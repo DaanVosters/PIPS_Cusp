@@ -4,11 +4,11 @@ dataAnalysisUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
     shiny::hr(),
-    shiny::h3("Fit a cusp model to uploaded data"),
-    shiny::p("Upload independent observations with a continuous response. Choose numeric predictors for the normal and splitting controls. Binary responses are not supported."),
+    shiny::h3("Fit a Cusp Model to Data"),
+    shiny::p("Upload independent observations with a continuous response. Choose numeric predictors for the normal and splitting controls. Binary responses are not supported. Have fun!"),
     shiny::fileInput(ns("file"), "CSV dataset", accept = ".csv"),
-    shiny::actionButton(ns("use_demo"), "Or use the demo dataset"),
-    shiny::p(class = "note", "Demo columns: opinion (response), information (normal control, alpha) and involvement (splitting control, beta)."),
+    shiny::actionButton(ns("use_demo"), "Use the Demo Dataset"),
+    shiny::p(class = "note", "This demo dataset is based on the cusp model of attitude change. The variables are: responses - attitude, normal variable - information, splitting variable - attention. For theoretical background, see van der Maas et al. (2003)."),
     shiny::p("Use commas between columns and decimal points for numbers. Missing or non-finite values in selected variables are excluded."),
     shiny::uiOutput(ns("variables")),
     shiny::actionButton(ns("fit"), "Fit cusp model", class = "btn-primary"),
@@ -21,7 +21,7 @@ dataAnalysisUI <- function(id) {
     shiny::conditionalPanel(
       condition = "input.compare", ns = ns,
       shiny::tableOutput(ns("comparison")),
-      shiny::p("Linear model: response ~ normal predictor + splitting predictor, fitted to the same standardised data. Lower AIC and BIC are better; delta is the difference from the better model. These criteria trade fit against the number of parameters. They do not prove that a catastrophe model is correct.")
+      shiny::p("Linear model: response ~ normal predictor + splitting predictor, fitted to the same standardised data. Lower AIC and BIC are better; delta is the difference from the better model. These criteria trade fit against the number of parameters.")
     ),
     shiny::checkboxInput(ns("observed"), "Show transformed observed responses", TRUE),
     shiny::checkboxInput(ns("projected"), "Show projections onto stable equilibria", TRUE),
@@ -34,7 +34,7 @@ dataAnalysisUI <- function(id) {
       ns("download_all"),
       "Download all analysis results"
     ),
-    shiny::p("A successful fit does not prove a catastrophe model is correct. Check theory, alternative models, convergence and sensitivity to starting values. This first version fits one numeric predictor per control and uses one optimisation start.")
+    shiny::p("A successful fit does not prove a catastrophe model is correct. The app assumes that the data-generating mechanism is a cusp, which need not be the case. A good fit shows only that the cusp describes the data well, not that it is the true mechanism. As always, check theory and consider alternative models.")
   )
 }
 
@@ -178,7 +178,7 @@ dataAnalysisServer <- function(id) {
       pick <- function(name, fallback) if (name %in% numeric_columns) name else fallback
       shiny::fluidRow(
         shiny::column(4, shiny::selectInput(ns("response"), "Continuous response", numeric_columns,
-                                            selected = pick("opinion", numeric_columns[1]))),
+                                            selected = pick("attitude", numeric_columns[1]))),
         shiny::column(4, shiny::selectInput(ns("normal"), "Predictor of normal control (alpha)", numeric_columns,
                                             selected = pick("information", numeric_columns[2]))),
         shiny::column(4, shiny::selectInput(ns("splitting"), "Predictor of splitting control (beta)", numeric_columns,
@@ -284,8 +284,6 @@ dataAnalysisServer <- function(id) {
                       "Columns: response = ", answer$columns[1], "; alpha predictor = ",
                       answer$columns[2], "; beta predictor = ", answer$columns[3], ".\n",
                       "Input columns were standardised; estimates refer to those scaled inputs.\n",
-                      "a[...] = normal-control coefficients; b[...] = splitting-control coefficients;\n",
-                      "w[...] = response-to-canonical-state transformation coefficients.\n",
                       paste(answer$warnings, collapse = "\n")))
       }
     })
