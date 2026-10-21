@@ -147,13 +147,13 @@ dataAnalysisServer <- function(id) {
       shiny::validate(shiny::need(length(numeric_columns) >= 2,
                                   "Need a numeric response and at least one separate numeric predictor."))
       ns <- session$ns
-      shiny::tagList(
-        shiny::selectInput(ns("response"), "Continuous response", numeric_columns,
-                           selected = numeric_columns[1]),
-        shiny::selectInput(ns("normal"), "Predictor of normal control (alpha)", numeric_columns,
-                           selected = numeric_columns[2]),
-        shiny::selectInput(ns("splitting"), "Predictor of splitting control (beta)", numeric_columns,
-                           selected = numeric_columns[min(3, length(numeric_columns))])
+      shiny::fluidRow(
+        shiny::column(4, shiny::selectInput(ns("response"), "Continuous response", numeric_columns,
+                                            selected = numeric_columns[1])),
+        shiny::column(4, shiny::selectInput(ns("normal"), "Predictor of normal control (alpha)", numeric_columns,
+                                            selected = numeric_columns[2])),
+        shiny::column(4, shiny::selectInput(ns("splitting"), "Predictor of splitting control (beta)", numeric_columns,
+                                            selected = numeric_columns[min(3, length(numeric_columns))]))
       )
     })
     
@@ -318,7 +318,7 @@ ui <- fluidPage(
               dataAnalysisUI("analysis"))))
 #end
 
-#re-load server function with new dataanalysis piece
+#re-load server function with new data-analysis piece
 server <- function(input, output, session) {
   state <- create_person_state()
   helpers <- create_server_helpers(input, session, state)
