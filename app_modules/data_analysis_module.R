@@ -1,3 +1,5 @@
+DA_DEMO_PATH <- "app_modules/demo_data.csv"
+
 dataAnalysisUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
@@ -5,6 +7,8 @@ dataAnalysisUI <- function(id) {
     shiny::h3("Fit a cusp model to uploaded data"),
     shiny::p("Upload independent observations with a continuous response. Choose numeric predictors for the normal and splitting controls. Binary responses are not supported."),
     shiny::fileInput(ns("file"), "CSV dataset", accept = ".csv"),
+    shiny::actionButton(ns("use_demo"), "Or use the demo dataset"),
+    shiny::p(class = "note", "Demo columns: opinion (response), information (normal control, alpha) and involvement (splitting control, beta)."),
     shiny::p("Use commas between columns and decimal points for numbers. Missing or non-finite values in selected variables are excluded."),
     shiny::uiOutput(ns("variables")),
     shiny::actionButton(ns("fit"), "Fit cusp model", class = "btn-primary"),
@@ -131,25 +135,39 @@ da_plot <- function(points, show_observed, show_projected, var_names, standardis
 dataAnalysisServer <- function(id) {
   shiny::moduleServer(id, function(input, output, session) {
     result <- shiny::reactiveVal(NULL)
+    data_source <- shiny::reactiveVal("upload")
     status <- shiny::reactiveVal("Upload a CSV to begin.")
     output$status <- shiny::renderText(status())
     
     uploaded <- shiny::reactive({
-      shiny::req(input$file)
-      shiny::validate(shiny::need(input$file$size <= 5 * 1024^2,
-                                  "This prototype accepts files up to 5 MB."))
-      d <- tryCatch(utils::read.csv(input$file$datapath,
-                                    stringsAsFactors = FALSE, check.names = FALSE), error = function(e) e)
-      shiny::validate(shiny::need(!inherits(d, "error"), "Unable to read this CSV."))
+      if (identical(data_source(), "demo")) {
+        shiny::validate(shiny::need(file.exists(DA_DEMO_PATH),
+                                    paste0("Demo file not found: ", DA_DEMO_PATH)))
+        d <- utils::read.csv(DA_DEMO_PATH, stringsAsFactors = FALSE, check.names = FALSE)
+      } else {
+        shiny::req(input$file)
+        shiny::validate(shiny::need(input$file$size <= 5 * 1024^2,
+                                    "This prototype accepts files up to 5 MB."))
+        d <- tryCatch(utils::read.csv(input$file$datapath,
+                                      stringsAsFactors = FALSE, check.names = FALSE), error = function(e) e)
+        shiny::validate(shiny::need(!inherits(d, "error"), "Unable to read this CSV."))
+      }
       shiny::validate(shiny::need(nrow(d) > 0, "The CSV has no data rows."),
                       shiny::need(!anyDuplicated(names(d)), "Column names must be unique."))
       d
     })
     
     shiny::observeEvent(input$file, {
+      data_source("upload")
       result(NULL)
       status("Dataset changed. Choose variables and fit again.")
     })
+    
+    shiny::observeEvent(input$use_demo, {
+      data_source("demo")
+      result(NULL)
+      status("Demo dataset loaded. Click Fit cusp model.")
+    }, ignoreInit = TRUE)
     
     output$variables <- shiny::renderUI({
       d <- uploaded()
@@ -157,13 +175,14 @@ dataAnalysisServer <- function(id) {
       shiny::validate(shiny::need(length(numeric_columns) >= 2,
                                   "Need a numeric response and at least one separate numeric predictor."))
       ns <- session$ns
+      pick <- function(name, fallback) if (name %in% numeric_columns) name else fallback
       shiny::fluidRow(
         shiny::column(4, shiny::selectInput(ns("response"), "Continuous response", numeric_columns,
-                                            selected = numeric_columns[1])),
+                                            selected = pick("opinion", numeric_columns[1]))),
         shiny::column(4, shiny::selectInput(ns("normal"), "Predictor of normal control (alpha)", numeric_columns,
-                                            selected = numeric_columns[2])),
+                                            selected = pick("information", numeric_columns[2]))),
         shiny::column(4, shiny::selectInput(ns("splitting"), "Predictor of splitting control (beta)", numeric_columns,
-                                            selected = numeric_columns[min(3, length(numeric_columns))]))
+                                            selected = pick("involvement", numeric_columns[min(3, length(numeric_columns))])))
       )
     })
     
