@@ -240,3 +240,36 @@ appearanceStyles <- function() {
     )
   )
 }
+
+#re-load ui
+ui <- fluidPage(
+  shinyjs::useShinyjs(),
+  titlePanel("People on a cusp catastrophe"),
+  sidebarLayout(
+    sidebarPanel(
+      appearanceUI("appearance"),
+      selectInput("person", "People to move", choices = c("Person 1" = "1"), selected = "1", multiple = TRUE),
+      actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
+      uiOutput("controls"), uiOutput("selection_note"),
+      actionButton("add_person", "Add person"),
+      actionButton("remove_people", "Remove selected people", class = "btn-danger"),
+      p(class = "note", "Remove deletes everyone selected. New people reuse the lowest available number. If everyone is removed, the next person is Person 1."),
+      actionButton("reset", "Reset everyone's controls"), hr(),
+      numericInput("speed", "Control movement speed (units / second)", value = 1, min = 0.1, max = 5, step = 0.1),
+      p(class = "note", "Sliders set targets for everyone selected. Current controls approach their targets in small increments, solving the equilibrium each time. Speed is constant in the control plane, not along the curved surface."),
+      strong("Selected people's positions"), verbatimTextOutput("coordinates"),
+      actionButton("switch_branch", "Switch selected people's branches"),
+      p(class = "note", "Switching acts at each person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
+      strong("Rename axes"),
+      textInput("axis_normal", "Normal-control axis name", default_labels$a),
+      textInput("axis_splitting", "Splitting-control axis name", default_labels$b),
+      textInput("axis_response", "Behavioural axis name", default_labels$response),
+      p(class = "note", "Names update automatically. Blank names use defaults. Renaming changes labels only, not mathematics or camera."), hr(),
+      p("Blue: stable equilibria. Orange: unstable equilibria. Dark curves: folds."),
+      p(class = "note", "The central foot marker follows the surface; the figure is decorative. At a fold each person jumps directly to the other stable branch, retaining their own branch history."),
+      p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Deselecting does not cancel motion toward an assigned target."),
+      p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
+    mainPanel(plotlyOutput("cusp", height = "720px"),
+              p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."),
+              dataAnalysisUI("analysis"))))
+#end
