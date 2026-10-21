@@ -1,0 +1,26 @@
+---
+title: "main"
+output: html_document
+---
+
+...
+
+```{r}
+#copied from example github; makes it so screen is not flooded with messages I believee
+if (!requireNamespace("knitr", quietly = TRUE)) {
+  install.packages("knitr", repos = "https://cloud.r-project.org")
+}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+#end of copied
+
+
+
+source("app_modules/base_model.R")
+source("app_modules/data_analysis_module.R")
+```
+
+...
+
+```{r}
+shinyApp(ui, server) #runs the app; other function used in example file though
+```
