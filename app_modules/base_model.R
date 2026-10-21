@@ -22,8 +22,6 @@ ui <- fluidPage(
         choices = c("Select a person" = "", "Person 1" = "1"),
         selected = "1", multiple = FALSE
       ),
-      checkboxInput("multi_select", "Select several people (they move together)", value = FALSE),
-      actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
       uiOutput("controls"), uiOutput("selection_note"),
       actionButton("add_person", "Add person"),
       actionButton("remove_people", "Remove selected person", class = "btn-danger"),
@@ -33,15 +31,14 @@ ui <- fluidPage(
       p(class = "note", "Selecting a person loads their current controls into the sliders. Moving a slider sets that person's target for that control; the other target is unchanged. Controls approach targets in small increments. Speed is constant in the control plane, not along the curved surface."),
       strong("Selected person's position"), verbatimTextOutput("coordinates"),
       actionButton("switch_branch", "Switch selected person's branch"),
-      p(class = "note", "Switching acts at each person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
-      strong("Rename axes"),
+      p(class = "note", "Switching acts at the selected person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),      strong("Rename axes"),
       textInput("axis_normal", "Normal-control axis name", default_labels$a),
       textInput("axis_splitting", "Splitting-control axis name", default_labels$b),
       textInput("axis_response", "Behavioural axis name", default_labels$response),
       p(class = "note", "Names update automatically. Blank names use defaults. Renaming changes labels only, not mathematics or camera."), hr(),
       p("Blue: stable equilibria. Orange: unstable equilibria. Dark curves: folds."),
       p(class = "note", "The central foot marker follows the surface; the figure is decorative. At a fold each person jumps directly to the other stable branch, retaining their own branch history."),
-      p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Deselecting does not cancel motion toward an assigned target."),
+      p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Selecting someone else does not cancel motion toward an assigned target."),
       p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
     mainPanel(plotlyOutput("cusp", height = "720px"),
               p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."))))
@@ -276,8 +273,8 @@ server <- function(input, output, session) {
   # 4. Shared sliders
   # ====================================================================
   
-  # On selection/reset, take initial slider values from the first selected
-  # person. Merely loading these values must NOT change other targets.
+  # On selection/reset, take initial slider values from the selected person's
+  # current position. Merely loading these values must NOT change any targets.
   slider_setup <- reactive({
     selected <- selected_people()
     version <- controls_version()
@@ -298,8 +295,8 @@ server <- function(input, output, session) {
   
   output$controls <- renderUI({
     if (!length(selected_people())) {
-      return(p("Select at least one person to show the sliders."))
-    }
+      return(p("Select a person to show the sliders."))
+      }
     
     setup <- slider_setup()
     labels <- isolate(axis_labels())
@@ -438,8 +435,7 @@ server <- function(input, output, session) {
     person_ids(targets$id)
     refresh_person_choices(targets, character())
     
-    showNotification(paste("Removed", length(removed_rows), "selected people."),
-                     type = "message")
+    showNotification("Removed the selected person.", type = "message")
   })
   
   observeEvent(input$reset, {
@@ -455,7 +451,7 @@ server <- function(input, output, session) {
   observeEvent(input$switch_branch, {
     selected <- selected_people()
     if (!length(selected)) {
-      showNotification("Select at least one person first.", type = "message")
+      showNotification("Select a person first.", type = "message")
       return()
     }
     
@@ -474,8 +470,11 @@ server <- function(input, output, session) {
     
     if (switched > 0) person_positions(positions)
     
-    showNotification(paste("Switched", switched, "of", length(selected),
-                           "selected people."), type = "message")
+    showNotification(
+      if (switched > 0) "Switched the selected person's branch."
+      else "No second stable branch at this location, so nothing changed.",
+      type = "message"
+    )
   })
   
   # ====================================================================
