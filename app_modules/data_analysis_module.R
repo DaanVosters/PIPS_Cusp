@@ -13,6 +13,12 @@ dataAnalysisUI <- function(id) {
     shiny::tableOutput(ns("coefficients")),
     shiny::h4("Fit information"),
     shiny::tableOutput(ns("metrics")),
+    shiny::checkboxInput(ns("compare"), "Compare with linear regression (AIC and BIC)", FALSE),
+    shiny::conditionalPanel(
+      condition = "input.compare", ns = ns,
+      shiny::tableOutput(ns("comparison")),
+      shiny::p("Linear model: response ~ normal predictor + splitting predictor, fitted to the same standardised data. Lower AIC and BIC are better; delta is the difference from the better model. These criteria trade fit against the number of parameters. They do not prove that a catastrophe model is correct.")
+    ),
     shiny::checkboxInput(ns("observed"), "Show transformed observed responses", TRUE),
     shiny::checkboxInput(ns("projected"), "Show projections onto stable equilibria", TRUE),
     plotly::plotlyOutput(ns("surface"), height = "600px"),
@@ -227,7 +233,20 @@ dataAnalysisServer <- function(id) {
                                                              "Response has fewer than 10 distinct values: assess whether a continuous density model is appropriate.")
         coefficients <- data.frame(parameter = names(fit$coefficients),
                                    estimate = unname(fit$coefficients), standard_error = unname(se))
-        list(fit = fit, coordinates = coordinates, coefficients = coefficients,
+        # Linear benchmark on the same standardised data.
+        # Base R's AIC/BIC count the error variance as a parameter for lm.
+        linear_fit <- stats::lm(response ~ normal + splitting, data = scaled)
+        n_obs <- nrow(scaled)
+        k_cusp <- length(fit$coefficients)
+        cusp_bic <- fit$aic + k_cusp * (log(n_obs) - 2)  # BIC derived from the package AIC
+        comparison <- data.frame(
+          model = c("Cusp", "Linear regression"),
+          parameters = c(k_cusp, length(stats::coef(linear_fit)) + 1L),
+          AIC = c(fit$aic, stats::AIC(linear_fit)),
+          BIC = c(cusp_bic, stats::BIC(linear_fit)))
+        comparison$delta_AIC <- comparison$AIC - min(comparison$AIC)
+        comparison$delta_BIC <- comparison$BIC - min(comparison$BIC)
+        list(fit = fit, coordinates = coordinates, coefficients = coefficients,comparison = comparison,
              scaling = scaling, excluded = sum(!ok), warnings = unique(warnings),
              columns = selected)
       }, error = function(e) e)
@@ -260,6 +279,11 @@ dataAnalysisServer <- function(id) {
                  value = c(nrow(r$coordinates), r$excluded, r$fit$aic,
                            100 * mean(r$coordinates$inside_bistable_region)))
     }, digits = 3)
+    
+    output$comparison <- shiny::renderTable({
+      shiny::req(result())
+      result()$comparison
+    }, digits = 2)
     
     output$surface <- plotly::renderPlotly({
       r <- result(); shiny::req(r)

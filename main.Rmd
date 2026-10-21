@@ -6,7 +6,7 @@ output: html_document
 ...
 
 ```{r}
-#copied from example github; makes it so screen is not flooded with messages I believee
+#copied from example github; makes it so screen is not flooded with messages I believe
 if (!requireNamespace("knitr", quietly = TRUE)) {
   install.packages("knitr", repos = "https://cloud.r-project.org")
 }
