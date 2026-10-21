@@ -23,9 +23,13 @@ dataAnalysisUI <- function(id) {
     shiny::checkboxInput(ns("projected"), "Show projections onto stable equilibria", TRUE),
     plotly::plotlyOutput(ns("surface"), height = "600px"),
     shiny::p("Grey dots are transformed observations and need not lie on the surface. Purple dots place each observation on its nearest stable equilibrium, keeping its estimated controls fixed. This uses the observed response to choose a branch: it is a descriptive projection, not an independent prediction or evidence of hysteresis."),
-    shiny::h4("Respondent coordinates (first 20 rows)"),
+    shiny::h4("Respondent coordinates (first 5 rows)"),
     shiny::tableOutput(ns("coordinates")),
     shiny::downloadButton(ns("download"), "Download all fitted coordinates"),
+    shiny::downloadButton(
+      ns("download_all"),
+      "Download all analysis results"
+    ),
     shiny::p("A successful fit does not prove a catastrophe model is correct. Check theory, alternative models, convergence and sensitivity to starting values. This first version fits one numeric predictor per control and uses one optimisation start.")
   )
 }
@@ -292,7 +296,7 @@ dataAnalysisServer <- function(id) {
     
     output$coordinates <- shiny::renderTable({
       shiny::req(result())
-      head(result()$coordinates, 20)
+      head(result()$coordinates, 5)
     }, digits = 3)
     
     output$download <- shiny::downloadHandler(
@@ -300,6 +304,252 @@ dataAnalysisServer <- function(id) {
       content = function(file) {
         shiny::req(result())
         utils::write.csv(result()$coordinates, file, row.names = FALSE)
+      }
+    )
+    output$download_all <- shiny::downloadHandler(
+      filename = function() {
+        paste0("cusp_analysis_", Sys.Date(), ".zip")
+      },
+      content = function(file) {
+        r <- result()
+        shiny::req(r, r$comparison)
+        
+        if (!requireNamespace("zip", quietly = TRUE)) {
+          stop('Install the package in your R console: install.packages("zip")')
+        }
+        
+        # Create a temporary folder for the exported tables.
+        export_dir <- tempfile("cusp_export_")
+        dir.create(export_dir)
+        
+        # Remove the temporary folder when the download is finished.
+        on.exit(
+          unlink(export_dir, recursive = TRUE),
+          add = TRUE
+        )
+        
+        write_table <- function(table, filename) {
+          utils::write.csv(
+            table,
+            file = file.path(export_dir, filename),
+            row.names = FALSE,
+            na = ""
+          )
+        }
+        
+        # 1. Fit information.
+        metrics <- data.frame(
+          measure = c(
+            "Complete observations",
+            "Excluded rows",
+            "Package AIC",
+            "Estimated controls inside bistable region (%)"
+          ),
+          value = c(
+            nrow(r$coordinates),
+            r$excluded,
+            r$fit$aic,
+            100 * mean(r$coordinates$inside_bistable_region)
+          )
+        )
+       
+        # 2. PDF with results
+        
+        if (!requireNamespace("gridExtra", quietly = TRUE)) {
+          stop('Install the package in your R console: install.packages("gridExtra")')
+        }
+        
+        # Format numbers for the report only.
+        # The coordinates CSV keeps its underlying numerical precision.
+        format_table <- function(table) {
+          table[] <- lapply(table, function(column) {
+            if (is.numeric(column)) {
+              ifelse(
+                is.na(column),
+                "Unavailable",
+                formatC(column, format = "f", digits = 4)
+              )
+            } else {
+              as.character(column)
+            }
+          })
+          table
+        }
+        
+        estimates <- format_table(r$coefficients)
+        names(estimates) <- c(
+          "Parameter", "Estimate", "Standard error"
+        )
+        
+        fit_information <- format_table(metrics)
+        names(fit_information) <- c("Measure", "Value")
+        
+        comparison <- format_table(r$comparison)
+        names(comparison) <- c(
+          "Model", "Parameters", "AIC", "BIC",
+          "Delta AIC", "Delta BIC"
+        )
+        
+        # Show sample sizes and parameter counts as whole numbers.
+        fit_information$Value[1:2] <- as.character(metrics$value[1:2])
+        comparison$Parameters <- as.character(r$comparison$parameters)
+        
+        report_tables <- list(
+          "Parameter estimates and standard errors" = estimates,
+          "Fit information" = fit_information,
+          "Comparison with linear regression" = comparison
+        )
+        
+        notes <- c(
+          "Estimates refer to standardised inputs. Unavailable standard errors are marked.",
+          "Bistable-region membership is descriptive; it does not establish hysteresis.",
+          "Lower AIC/BIC is better. Scores are exported as calculated by the app."
+        )
+        
+        # Open one PDF and write one page
+        # Put all three report sections on one A4 portrait page.
+        grDevices::pdf(
+          file = file.path(export_dir, "analysis_report.pdf"),
+          width = 8.3,
+          height = 11.7,
+          family = "Helvetica"
+        )
+        
+        tryCatch({
+          heading <- grid::textGrob(
+            "Cusp model analysis",
+            x = 0,
+            hjust = 0,
+            gp = grid::gpar(
+              fontsize = 20,
+              fontface = "bold",
+              col = "#172033"
+            )
+          )
+          
+          subtitle <- grid::textGrob(
+            paste0(
+              "Response: ", r$columns[1],
+              "\nAlpha predictor: ", r$columns[2],
+              " | Beta predictor: ", r$columns[3],
+              "\nExported: ", Sys.Date()
+            ),
+            x = 0,
+            hjust = 0,
+            gp = grid::gpar(
+              fontsize = 10,
+              col = "#526176"
+            )
+          )
+          
+          make_section <- function(title, data) {
+            section_heading <- grid::textGrob(
+              title,
+              x = 0,
+              hjust = 0,
+              gp = grid::gpar(
+                fontsize = 13,
+                fontface = "bold",
+                col = "#172033"
+              )
+            )
+            
+            table <- gridExtra::tableGrob(
+              data,
+              rows = NULL,
+              theme = gridExtra::ttheme_minimal(
+                base_size = 9,
+                padding = grid::unit(c(3, 3), "mm"),
+                core = list(
+                  fg_params = list(col = "#172033"),
+                  bg_params = list(
+                    fill = c("#f1f5f9", "#ffffff"),
+                    col = NA
+                  )
+                ),
+                colhead = list(
+                  fg_params = list(
+                    col = "#ffffff",
+                    fontface = "bold"
+                  ),
+                  bg_params = list(
+                    fill = "#334155",
+                    col = NA
+                  )
+                )
+              )
+            )
+            
+            gridExtra::arrangeGrob(
+              section_heading,
+              table,
+              ncol = 1,
+              heights = grid::unit.c(
+                grid::unit(9, "mm"),
+                sum(table$heights)
+              )
+            )
+          }
+          
+          sections <- lapply(
+            seq_along(report_tables),
+            function(i) {
+              make_section(
+                names(report_tables)[i],
+                report_tables[[i]]
+              )
+            }
+          )
+          
+          footer <- grid::textGrob(
+            paste(
+              "Estimates refer to standardised inputs.",
+              "Unavailable standard errors are marked.",
+              "Lower AIC/BIC is better; values are exported as calculated by the app.",
+              "Bistable-region membership does not establish hysteresis.",
+              sep = "\n"
+            ),
+            x = 0,
+            hjust = 0,
+            gp = grid::gpar(
+              fontsize = 9,
+              col = "#526176"
+            )
+          )
+          
+          page <- gridExtra::arrangeGrob(
+            heading,
+            subtitle,
+            sections[[1]],
+            sections[[2]],
+            sections[[3]],
+            footer,
+            ncol = 1,
+            heights = c(0.07, 0.10, 0.29, 0.23, 0.20, 0.11)
+          )
+          
+          grid::grid.newpage()
+          grid::pushViewport(
+            grid::viewport(width = 0.90, height = 0.92)
+          )
+          grid::grid.draw(page)
+          grid::popViewport()
+        }, finally = {
+          grDevices::dev.off()
+        })
+        
+        # 3. All fitted respondent coordinates.
+        write_table(
+          r$coordinates,
+          "respondent_coordinates.csv"
+        )
+        
+        # Bundle the four files into a ZIP.
+        zip::zipr(
+          zipfile = file,
+          files = list.files(export_dir),
+          root = export_dir
+        )
       }
     )
     invisible(result)
