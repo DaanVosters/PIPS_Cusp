@@ -17,17 +17,22 @@ ui <- fluidPage(
   titlePanel("People on a cusp catastrophe"),
   sidebarLayout(
     sidebarPanel(
-      selectInput("person", "People to move", choices = c("Person 1" = "1"), selected = "1", multiple = TRUE),
+      selectInput(
+        "person", "Person to move",
+        choices = c("Select a person" = "", "Person 1" = "1"),
+        selected = "1", multiple = FALSE
+      ),
+      checkboxInput("multi_select", "Select several people (they move together)", value = FALSE),
       actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
       uiOutput("controls"), uiOutput("selection_note"),
       actionButton("add_person", "Add person"),
-      actionButton("remove_people", "Remove selected people", class = "btn-danger"),
-      p(class = "note", "Remove deletes everyone selected. New people reuse the lowest available number. If everyone is removed, the next person is Person 1."),
+      actionButton("remove_people", "Remove selected person", class = "btn-danger"),
+      p(class = "note", "Remove permanently deletes the selected person from the plot and list. Switching selection does not delete anyone. New people reuse the lowest available number."),
       actionButton("reset", "Reset everyone's controls"), hr(),
       numericInput("speed", "Control movement speed (units / second)", value = 1, min = 0.1, max = 5, step = 0.1),
-      p(class = "note", "Sliders set targets for everyone selected. Current controls approach their targets in small increments, solving the equilibrium each time. Speed is constant in the control plane, not along the curved surface."),
-      strong("Selected people's positions"), verbatimTextOutput("coordinates"),
-      actionButton("switch_branch", "Switch selected people's branches"),
+      p(class = "note", "Selecting a person loads their current controls into the sliders. Moving a slider sets that person's target for that control; the other target is unchanged. Controls approach targets in small increments. Speed is constant in the control plane, not along the curved surface."),
+      strong("Selected person's position"), verbatimTextOutput("coordinates"),
+      actionButton("switch_branch", "Switch selected person's branch"),
       p(class = "note", "Switching acts at each person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
       strong("Rename axes"),
       textInput("axis_normal", "Normal-control axis name", default_labels$a),
@@ -73,6 +78,24 @@ choose_equilibrium <- function(a, b, previous_x) {
   roots <- real_roots(a, b)
   candidates <- roots[3*roots^2-b >= -1e-7] #if second derivative at roots is bigger than 0...; slightly negative to allow for rounding error according to AI.
   return(candidates[which.min(abs(candidates - previous_x))])
+}
+
+# Random starting point for a new person: random controls inside the slider
+# limits, placed on a randomly chosen stable branch.
+random_start <- function() {
+  for (attempt in seq_len(100L)) {
+    a <- round(runif(1, normal_limits[1], normal_limits[2]), 2)
+    b <- round(runif(1, splitting_limits[1], splitting_limits[2]), 2)
+    roots <- real_roots(a, b)
+    stable <- roots[3 * roots^2 - b > 1e-7]
+    
+    if (length(stable)) {
+      x <- stable[sample.int(length(stable), 1L)]
+      return(list(a = a, b = b, x = x))
+    }
+  }
+  
+  stop("Could not generate a stable random starting point.")
 }
 
 #for drawing 3d persons
@@ -182,9 +205,13 @@ server <- function(input, output, session) {
   }
   
   refresh_person_choices <- function(targets, selected) {
+    selected <- as.character(selected)
+    selected <- selected[selected %in% targets$id]
+    
     updateSelectInput(
       session, "person",
-      choices = person_choices(targets), selected = selected
+      choices = c("Select a person" = "", person_choices(targets)),
+      selected = if (length(selected)) selected[1] else ""
     )
   }
   
@@ -231,26 +258,19 @@ server <- function(input, output, session) {
   # 3. Selection
   # ====================================================================
   
-  # Observe membership only, not target changes. reactiveVal also avoids
-  # refreshing controls if an input event leaves the selection unchanged.
   observeEvent(list(input$person, person_ids()), {
     requested_ids <- as.character(input$person)
     valid_ids <- requested_ids[requested_ids %in% person_ids()]
+    
+    if (length(valid_ids) > 1L) {
+      valid_ids <- valid_ids[1]
+    }
     
     if (!identical(valid_ids, selected_people())) {
       selected_people(valid_ids)
       refresh_controls()
     }
   }, priority = 100)
-  
-  observeEvent(input$select_all, {
-    selected <- as.character(sort(as.integer(person_ids())))
-    updateSelectInput(session, "person", selected = selected)
-  })
-  
-  observeEvent(input$select_none, {
-    updateSelectInput(session, "person", selected = character())
-  })
   
   # ====================================================================
   # 4. Shared sliders
@@ -261,18 +281,18 @@ server <- function(input, output, session) {
   slider_setup <- reactive({
     selected <- selected_people()
     version <- controls_version()
-    req(length(selected) > 0)
+    req(length(selected) == 1L)
     
-    targets <- isolate(person_targets())
-    reference_row <- match(selected[1], targets$id)
+    positions <- isolate(person_positions())
+    reference_row <- match(selected[1], positions$id)
     req(!is.na(reference_row))
     
     list(
       version = version,
       a_input = paste0("normal_", version),
       b_input = paste0("splitting_", version),
-      initial_a = targets$a[reference_row],
-      initial_b = targets$b[reference_row]
+      initial_a = round(positions$a[reference_row], 2),
+      initial_b = round(positions$b[reference_row], 2)
     )
   })
   
@@ -286,12 +306,12 @@ server <- function(input, output, session) {
     
     tagList(
       sliderInput(
-        setup$a_input, paste0(labels$a, " — selected targets"),
+        setup$a_input, paste0(labels$a, " — set target"),
         min = normal_limits[1], max = normal_limits[2],
         value = setup$initial_a, step = 0.01
       ),
       sliderInput(
-        setup$b_input, paste0(labels$b, " — selected targets"),
+        setup$b_input, paste0(labels$b, " — set target"),
         min = splitting_limits[1], max = splitting_limits[2],
         value = setup$initial_b, step = 0.01
       )
@@ -306,10 +326,10 @@ server <- function(input, output, session) {
     reference_name <- targets$name[match(selected[1], targets$id)]
     
     p(class = "note", paste0(
-      length(selected), " selected. On selection, sliders load ",
-      reference_name, "'s targets. Moving one slider assigns its value to ",
-      "everyone selected; their other target remains unchanged. ",
-      "Selection alone never moves people."
+      reference_name, " is selected. Sliders load their current position ",
+      "when selected, rounded to 0.01. Moving a slider assigns a new ",
+      "target for that control only. The other target stays unchanged. ",
+      "Selection alone does not move anyone or cancel existing motion."
     ))
   })
   
@@ -319,9 +339,9 @@ server <- function(input, output, session) {
     setup <- slider_setup()
     
     updateSliderInput(session, setup$a_input,
-                      label = paste0(labels$a, " — selected targets"))
+                      label = paste0(labels$a, " — set target"))
     updateSliderInput(session, setup$b_input,
-                      label = paste0(labels$b, " — selected targets"))
+                      label = paste0(labels$b, " — set target"))
   })
   
   observe({
@@ -361,26 +381,28 @@ server <- function(input, output, session) {
   observeEvent(input$add_person, {
     targets <- person_targets()
     positions <- person_positions()
-    selected <- selected_people()
     new_id <- as.character(next_available_number(targets$id))
     
-    if (nrow(targets) > 0) {
-      reference_id <- if (length(selected)) selected[1] else targets$id[1]
-      new_target <- targets[match(reference_id, targets$id), , drop = FALSE]
-      new_position <- positions[match(reference_id, positions$id), , drop = FALSE]
-    } else {
-      new_target <- initial_targets
-      new_position <- initial_positions
-    }
+    start <- random_start()
+    new_target <- data.frame(
+      id = new_id,
+      name = paste("Person", new_id),
+      a = start$a,
+      b = start$b,
+      color = random_colour(),
+      stringsAsFactors = FALSE
+    )
+    new_position <- data.frame(
+      id = new_id,
+      a = start$a,
+      b = start$b,
+      x = start$x,
+      stringsAsFactors = FALSE
+    )
     
-    new_target$id <- new_id
-    new_target$name <- paste("Person", new_id)
-    new_target$color <- random_colour()
-    new_position$id <- new_id
-    
-    # Queue trace addition before any updates involving its new indices.
     update_plot("addTraces", person_traces(
-      new_target, new_position, labels = axis_labels()
+      new_target, new_position, selected = TRUE,
+      labels = axis_labels()
     ))
     
     targets <- rbind(targets, new_target)
@@ -388,13 +410,13 @@ server <- function(input, output, session) {
     person_positions(rbind(positions, new_position))
     person_ids(targets$id)
     
-    refresh_person_choices(targets, unique(c(selected, new_id)))
+    refresh_person_choices(targets, new_id)
   })
   
   observeEvent(input$remove_people, {
     selected <- selected_people()
     if (!length(selected)) {
-      showNotification("Select at least one person to remove.", type = "message")
+      showNotification("Select a person to remove.", type = "message")
       return()
     }
     
@@ -619,8 +641,16 @@ server <- function(input, output, session) {
     selected <- ids %in% selected_people()
     bodies <- body_indices(seq_along(ids))
     
-    update_plot("restyle", list("line.width" = as.list(ifelse(selected, 8, 5))), bodies)
-    update_plot("restyle", list("marker.size" = as.list(ifelse(selected, 7, 5))), bodies + 1L)
+    update_plot(
+      "restyle",
+      list("line.width" = as.list(ifelse(selected, 8, 5))),
+      bodies
+    )
+    update_plot(
+      "restyle",
+      list("marker.size" = as.list(ifelse(selected, 7, 5))),
+      bodies + 1L
+    )
   }, ignoreInit = TRUE)
   
   observeEvent(axis_labels(), {
