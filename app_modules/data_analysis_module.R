@@ -1,4 +1,11 @@
-DA_DEMO_PATH <- "app_modules/demo_data.csv"
+library(shiny)
+library(plotly)
+library(cusp)
+library(zip)
+library(gridExtra)
+
+
+DA_DEMO_PATH <- "data/demo_data.csv"
 
 dataAnalysisUI <- function(id) {
   ns <- shiny::NS(id)
