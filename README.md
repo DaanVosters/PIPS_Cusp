@@ -6,7 +6,17 @@ This Shiny app was developed as part of the PIPS course at the UvA. Our app enab
 
 ### Repository Structure
 
-
+```text
+PIPS_Cusp/                      #Repository Root
+├── app_modules/                
+│   ├── appearance_module.R     #Contains code for the appearance module
+│   ├── base_model.R            #Contains code for the base visualization module 
+│   ├── data_analysis_module.R  #Contains code for the statistical analysis module
+│   └── demo_data.csv           #Simulated dataset based on the Attitude Cusp Model used for the app and analysis
+├── .gitignore                  #Files excluded from Github
+├── README.md                   #Project documentation: About and Installation
+└── main.Rmd                    #Main Deliverable: Shiny App and app description
+```
 
 ### Requirements for Running Our Main Deliverable
 You need an internet connection to install packages. You need R and RStudio downloaded on your computer. 
