@@ -14,7 +14,7 @@ All source code is loaded from 'X', while this document exposes the high-level i
 
 ```{r}
 #function copied from example repo
-invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs"), function(package) {
+invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs", "zip", "gridExtra", "cusp"), function(package) {
   if (!requireNamespace(package, quietly = TRUE)) {
     install.packages(package, repos = "https://cloud.r-project.org")
   }
