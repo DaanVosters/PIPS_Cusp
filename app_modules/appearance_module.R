@@ -1,4 +1,8 @@
 # appearance_module.R
+library(shiny)
+library(shinyjs)
+library(plotly)
+library(colourpicker)
 
 appearanceUI <- function(id) {
   ns <- shiny::NS(id)
