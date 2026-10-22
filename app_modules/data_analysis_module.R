@@ -573,37 +573,43 @@ dataAnalysisServer <- function(id) {
   })
 }
 
-
+                                
 #----------base-model update part----------
 #re-load ui
 ui <- fluidPage(
   tags$head(tags$style(HTML("body { background: #f8fafc; color: #172033; }
     .well { background: white; border-color: #e2e8f0; }
     .note { color: #526176; font-size: 13px; }"))),
-  titlePanel("People on a cusp catastrophe"),
+  titlePanel("Interactive Cusp Catastrophe Tool: Visualisation & Data-Analysis"),
   sidebarLayout(
     sidebarPanel(
-      selectInput("person", "People to move", choices = c("Person 1" = "1"), selected = "1", multiple = TRUE),
-      actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
+      selectInput(
+        "person", "Person to move",
+        choices = c("Select a person" = "", "Person 1" = "1"),
+        selected = "1", multiple = FALSE
+      ),
       uiOutput("controls"), uiOutput("selection_note"),
       actionButton("add_person", "Add person"),
-      actionButton("remove_people", "Remove selected people", class = "btn-danger"),
-      p(class = "note", "Remove deletes everyone selected. New people reuse the lowest available number. If everyone is removed, the next person is Person 1."),
+      actionButton("remove_people", "Remove selected person", class = "btn-danger"),
+      p(class = "note", "Removing a person permanently deletes them from the plot and list. Switching selection does not delete anyone. New people are assigned the lowest available number."),
       actionButton("reset", "Reset everyone's controls"), hr(),
       numericInput("speed", "Control movement speed (units / second)", value = 1, min = 0.1, max = 5, step = 0.1),
-      p(class = "note", "Sliders set targets for everyone selected. Current controls approach their targets in small increments, solving the equilibrium each time. Speed is constant in the control plane, not along the curved surface."),
-      strong("Selected people's positions"), verbatimTextOutput("coordinates"),
-      actionButton("switch_branch", "Switch selected people's branches"),
-      p(class = "note", "Switching acts at each person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
+      strong("Selected person's position"), verbatimTextOutput("coordinates"),
+      actionButton("switch_branch", "Switch selected person's branch"),
+      p(class = "note", "Switching acts at the selected person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
       strong("Rename axes"),
       textInput("axis_normal", "Normal-control axis name", default_labels$a),
       textInput("axis_splitting", "Splitting-control axis name", default_labels$b),
       textInput("axis_response", "Behavioural axis name", default_labels$response),
-      p(class = "note", "Names update automatically. Blank names use defaults. Renaming changes labels only, not mathematics or camera."), hr(),
-      p("Blue: stable equilibria. Orange: unstable equilibria. Dark curves: folds."),
-      p(class = "note", "The central foot marker follows the surface; the figure is decorative. At a fold each person jumps directly to the other stable branch, retaining their own branch history."),
-      p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Deselecting does not cancel motion toward an assigned target."),
-      p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
+      p(class = "note", "Use this option to make your theory-driven visualisations easier to interpret. Changing names only changes the labels."), hr(),
+      h4("We need to talk about the cusp…"),
+      p(class = "note", "The surface of the cusp is divided into two sections: stable and unstable equilibria (in different colours). The latter is also referred to as the inaccessible region as people can only occupy these positions momentarily. The dark lines mark the fold."),
+      p(class = "note", "At a fold each person jumps directly to the other stable branch. We hope that this app helps you visualise psychological phenomena whose dynamics theory implies is cusp-like. One such example is the cusp model of attitudes (van der Maas et al., 2003)."),
+      strong("Reference"),
+      p(class = "note", "van der Maas, H. L. J., Kolstein, R., & van der Pligt, J. (2003). Sudden transitions in attitudes. ",
+        tags$em("Sociological Methods & Research, 32"), "(2), 125–152. ",
+        tags$a(href = "https://doi.org/10.1177/0049124103253773",
+               "https://doi.org/10.1177/0049124103253773", target = "_blank"))),
     mainPanel(plotlyOutput("cusp", height = "720px"),
               p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."),
               dataAnalysisUI("analysis"))))
@@ -611,6 +617,7 @@ ui <- fluidPage(
 
 #re-load server function with new data-analysis piece
 server <- function(input, output, session) {
+  # Create fresh state and helpers for each browser session.
   state <- create_person_state()
   helpers <- create_server_helpers(input, session, state)
   
