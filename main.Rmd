@@ -25,5 +25,10 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE) #prevents flooding of co
 source("app_modules/base_model.R")
 source("app_modules/data_analysis_module.R")
 source("app_modules/appearance_module.R")
-shinyApp(ui, server) #runs the app
+```
+
+...
+
+```{r}
+shinyApp(ui, server) #runs the app; other function used in example file though
 ```
