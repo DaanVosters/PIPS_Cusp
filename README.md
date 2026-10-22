@@ -4,6 +4,22 @@ Welcome to our cusp catastrophe app!
 ## About the Project
 This Shiny app was developed as part of the PIPS course at the UvA. Our app enables users to visualise (psychological) phenomena which are theorised to follow the dynamics of a cusp. For an example about attitudes, see van der Maas et al. (2003). Additionally, the app allows users to fit the cusp to uploaded data.
 
+### Repository Structure
+
+
+
+### Requirements for Running Our Main Deliverable
+You need an internet connection to install packages. You need R and RStudio downloaded on your computer. 
+
+Clone the repository using R:
+
+```r
+system("git clone https://github.com/DaanVosters/PIPS_Cusp.git")
+```
+
+- Open 
+
+
 ### Visualisation Feature
 The base model contains only the visualisation feature. Users can add several people to (and remove from) the 3D graph and move them along the cusp using two sliders, which correspond to the normal and splitting variables. People can also be restored to their starting position with the "Reset everyone's controls" button. The user can adjust how quickly people move over the cusp. 
 
