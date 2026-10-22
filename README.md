@@ -33,12 +33,12 @@ Part One: main.Rmd
 
 
 ### Visualisation Feature
-The base model contains only the visualisation feature. Users can add several people to (and remove from) the 3D graph and move them along the cusp using two sliders, which correspond to the normal and splitting variables. People can also be restored to their starting position with the "Reset everyone's controls" button. The user can adjust how quickly people move over the cusp. 
+Users can add several people to (and remove from) the 3D graph and move them along the cusp using two sliders, which correspond to the normal and splitting variables. People can also be restored to their starting position with the "Reset everyone's controls" button. The user can adjust how quickly people move over the cusp. 
 
 For an easier overview, users can change the names of variables near the bottom of the left panel to the corresponding constructs from their psychological theory. The coordinates of the selected person are displayed on the left panel or can be checked by hovering over the graph. 
 
 ### Data Analysis Feature
-The data analysis module, located under the main graph when loaded, enables users to fit the cusp to data. For this, a CSV file is required with response, splitting, and normal variables. All variables must be numeric and continuous. The user can choose which variable is which using drop-down menus. A demo dataset is available based on the attitude cusp model (van der Maas et al., 2003). 
+The data analysis section, located under the main graph when loaded, enables users to fit the cusp to data. For this, a CSV file is required with response, splitting, and normal variables. All variables must be numeric and continuous. The user can choose which variable is which using drop-down menus. A demo dataset is available based on the attitude cusp model (van der Maas et al., 2003). 
 
 After the model is fit, parameter estimates and the fit information is displayed. Optionally, the fit of the cusp model can be compared to linear regression using Akaike Information Criterion (AIC) and Bayesian Information Criterion (BIC). Fitted coordinates and analysis results can easily be downloaded using the buttons at the bottom. A 3D cusp graph is also created, to which all datapoints are added. Black dots show the true locations of the datapoints (possibly standardised), and a purple dot corresponding to each black dot shows the closest projection onto the cusp, since datapoints need not lie perfectly on the cusp. Some aid in interpretation is also provided in the notes displayed under graphs and buttons.
 
