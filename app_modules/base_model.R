@@ -11,7 +11,9 @@ max_control_step <- 0.005 #smaller value should lead to better tracking over the
 
 #----------Figure text----------                   
 ui <- fluidPage(
-  shinyjs::useShinyjs(),
+  tags$head(tags$style(HTML("body { background: #f8fafc; color: #172033; }
+    .well { background: white; border-color: #e2e8f0; }
+    .note { color: #526176; font-size: 13px; }"))),
   titlePanel("Interactive Cusp Catastrophe Tool: Visualisation & Data-Analysis"),
   sidebarLayout(
     sidebarPanel(
@@ -42,17 +44,8 @@ ui <- fluidPage(
         tags$em("Sociological Methods & Research, 32"), "(2), 125–152. ",
         tags$a(href = "https://doi.org/10.1177/0049124103253773",
                "https://doi.org/10.1177/0049124103253773", target = "_blank"))),
-    mainPanel(
-      appearanceUI("appearance"),
-      plotlyOutput("cusp", height = "720px"),
-      p(
-        class = "note",
-        "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."
-      ),
-      dataAnalysisUI("analysis")
-    )
-  )
-)
+    mainPanel(plotlyOutput("cusp", height = "720px"),
+              p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."))))
 #----------end----------
 
 
