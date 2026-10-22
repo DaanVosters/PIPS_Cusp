@@ -37,7 +37,7 @@ if (length(missing)) install.packages(missing)
 ```
 
 Part One: main.Rmd
-  - Open main.Rmd file. Click **Run App** in the top right hand corner. All scripts (base, statistic analysis, and appearance) do not need to be manually opened into R. 
+  - Open main.Rmd file. Click **Run App** in the top right hand corner. The main.Rmd is the only file you need to open.
 
 
 ### Visualisation Feature
