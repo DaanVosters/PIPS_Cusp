@@ -3,24 +3,20 @@ title: "main"
 output: html_document
 ---
 
-...
+text to be added
+
 
 ```{r}
-#copied from example github; makes it so screen is not flooded with messages I believe
-if (!requireNamespace("knitr", quietly = TRUE)) {
-  install.packages("knitr", repos = "https://cloud.r-project.org")
-}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE)
-#end of copied
+#function copied from example repo
+invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs"), function(package) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    install.packages(package, repos = "https://cloud.r-project.org")
+  }
+}))
 
 
 
 source("app_modules/base_model.R")
 source("app_modules/data_analysis_module.R")
-```
-
-...
-
-```{r}
-shinyApp(ui, server) #runs the app; other function used in example file though
+shinyApp(ui, server)#runs the app
 ```
