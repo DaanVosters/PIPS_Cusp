@@ -134,47 +134,54 @@ fold_a <- -2*fold_x^3
 fold_b <- 3*fold_x^2
 #----------end----------
 
-#----------The big app function, annotated by AI (I don't get it)----------
-server <- function(input, output, session) {
-  
-  # ====================================================================
-  # 1. State: target controls, current positions, and selected people
-  # ====================================================================
-  
+
+#----------AI code I don't understand----------
+
+# 1. Create shared state
+create_person_state <- function() {
   initial_targets <- data.frame(
     id = "1", name = "Person 1", a = -1, b = 2,
     color = random_colour(), stringsAsFactors = FALSE
   )
+  
   initial_positions <- data.frame(
     id = "1", a = -1, b = 2,
     x = choose_equilibrium(-1, 2, -2), stringsAsFactors = FALSE
   )
   
-  # Both tables stay in Plotly trace order, NOT numerical person-ID order.
-  # Only dropdown choices are sorted numerically.
-  person_targets <- reactiveVal(initial_targets)
-  person_positions <- reactiveVal(initial_positions)
-  person_ids <- reactiveVal("1")
-  selected_people <- reactiveVal("1")
-  
-  # Fresh slider IDs prevent old input values affecting a new selection.
-  controls_version <- reactiveVal(0L)
-  previous_slider_values <- reactiveVal(NULL)
-  previous_update_time <- Sys.time()
-  
-  # ====================================================================
-  # 2. Small helpers
-  # ====================================================================
-  
-  # Every plot change is made in place, preserving the camera.
+  # A list groups the reactive objects; it does not merge their dependencies.
+  # Read with state$person_targets().
+  # Write with state$person_targets(updated_targets).
+  #
+  # Targets and positions retain Plotly trace order, not numerical ID order.
+  # Only the dropdown choices are sorted numerically.
+  list(
+    initial_targets = initial_targets,
+    initial_positions = initial_positions,
+    person_targets = reactiveVal(initial_targets),
+    person_positions = reactiveVal(initial_positions),
+    person_ids = reactiveVal("1"),
+    selected_people = reactiveVal("1"),
+    controls_version = reactiveVal(0L),
+    previous_slider_values = reactiveVal(NULL)
+  )
+}
+
+
+# 2. Shared server utilities
+create_server_helpers <- function(input, session, state) {
+  # Update the existing plot rather than rebuilding it, preserving the camera.
   update_plot <- function(method, ...) {
     proxy <- plotlyProxy("cusp", session, deferUntilFlush = TRUE)
     plotlyProxyInvoke(proxy, method, ...)
   }
   
-  # Plotly uses zero-based indices. The first three traces are the surface
-  # sheets and folds; each subsequent person has body, head, and anchor.
-  body_indices <- function(rows) 3L + 3L * (rows - 1L)
+  # Plotly uses zero-based trace indices.
+  # Traces 0, 1, and 2 are the two sheets and the folds.
+  # Each person then has three traces: body, head, and foot marker.
+  body_indices <- function(rows) {
+    3L + 3L * (rows - 1L)
+  }
   
   all_person_trace_indices <- function(rows) {
     first <- body_indices(rows)
@@ -188,82 +195,76 @@ server <- function(input, output, session) {
     )
   }
   
+  # Changing this counter gives the sliders fresh input IDs.
+  # Old slider values therefore cannot affect the new selection.
   refresh_controls <- function() {
-    controls_version(isolate(controls_version()) + 1L)
+    state$controls_version(isolate(state$controls_version()) + 1L)
   }
   
-  # Blank axis labels fall back to the standard model labels.
   use_default_if_blank <- function(value, default) {
-    if (is.null(value) || !nzchar(trimws(value))) default else trimws(value)
+    if (is.null(value) || !nzchar(trimws(value))) {
+      default
+    } else {
+      trimws(value)
+    }
   }
   
+  # Controls, the plot, and the readout share these same reactive labels.
   axis_labels <- debounce(reactive({
     list(
       a = use_default_if_blank(input$axis_normal, default_labels$a),
       b = use_default_if_blank(input$axis_splitting, default_labels$b),
-      response = use_default_if_blank(input$axis_response, default_labels$response)
+      response = use_default_if_blank(
+        input$axis_response, default_labels$response
+      )
     )
   }), 250)
   
-  # Advance one person toward their target. Intermediate response values
-  # are solved internally; only the endpoint is sent to the plot.
-  advance_person <- function(a, b, x, target_a, target_b, travel, distance) {
-    start <- c(a, b)
-    target <- c(target_a, target_b)
-    
-    endpoint <- if (travel >= distance) {
-      target
-    } else {
-      start + (travel / distance) * (target - start)
-    }
-    
-    number_of_steps <- max(1L, as.integer(ceiling(travel / max_control_step)))
-    
-    for (step in seq_len(number_of_steps)) {
-      controls <- start + (step / number_of_steps) * (endpoint - start)
-      x <- choose_equilibrium(controls[1], controls[2], x)
-    }
-    
-    list(a = endpoint[1], b = endpoint[2], x = x)
-  }
-  
-  # ====================================================================
-  # 3. Selection
-  # ====================================================================
-  
-  # Observe membership only, not target changes. reactiveVal also avoids
-  # refreshing controls if an input event leaves the selection unchanged.
-  observeEvent(list(input$person, person_ids()), {
+  list(
+    update_plot = update_plot,
+    body_indices = body_indices,
+    all_person_trace_indices = all_person_trace_indices,
+    refresh_person_choices = refresh_person_choices,
+    refresh_controls = refresh_controls,
+    axis_labels = axis_labels
+  )
+}
+
+
+# 3. Selection
+setup_selection <- function(input, session, state, helpers) {
+  # Observe membership, not changes to people's target coordinates.
+  observeEvent(list(input$person, state$person_ids()), {
     requested_ids <- as.character(input$person)
-    valid_ids <- requested_ids[requested_ids %in% person_ids()]
+    valid_ids <- requested_ids[requested_ids %in% state$person_ids()]
     
-    if (!identical(valid_ids, selected_people())) {
-      selected_people(valid_ids)
-      refresh_controls()
+    if (!identical(valid_ids, state$selected_people())) {
+      state$selected_people(valid_ids)
+      helpers$refresh_controls()
     }
   }, priority = 100)
   
   observeEvent(input$select_all, {
-    selected <- as.character(sort(as.integer(person_ids())))
+    selected <- as.character(sort(as.integer(state$person_ids())))
     updateSelectInput(session, "person", selected = selected)
   })
   
   observeEvent(input$select_none, {
     updateSelectInput(session, "person", selected = character())
   })
-  
-  # ====================================================================
-  # 4. Shared sliders
-  # ====================================================================
-  
-  # On selection/reset, take initial slider values from the first selected
-  # person. Merely loading these values must NOT change other targets.
+}
+
+
+# 4. Shared sliders
+setup_controls <- function(input, output, session, state, helpers) {
+  # Loading slider values after selection/reset must not change targets.
+  # isolate() prevents target edits from rebuilding these sliders.
   slider_setup <- reactive({
-    selected <- selected_people()
-    version <- controls_version()
+    selected <- state$selected_people()
+    version <- state$controls_version()
     req(length(selected) > 0)
     
-    targets <- isolate(person_targets())
+    targets <- isolate(state$person_targets())
     reference_row <- match(selected[1], targets$id)
     req(!is.na(reference_row))
     
@@ -277,12 +278,12 @@ server <- function(input, output, session) {
   })
   
   output$controls <- renderUI({
-    if (!length(selected_people())) {
+    if (!length(state$selected_people())) {
       return(p("Select at least one person to show the sliders."))
     }
     
     setup <- slider_setup()
-    labels <- isolate(axis_labels())
+    labels <- isolate(helpers$axis_labels())
     
     tagList(
       sliderInput(
@@ -299,10 +300,10 @@ server <- function(input, output, session) {
   })
   
   output$selection_note <- renderUI({
-    selected <- selected_people()
+    selected <- state$selected_people()
     if (!length(selected)) return(NULL)
     
-    targets <- isolate(person_targets())
+    targets <- isolate(state$person_targets())
     reference_name <- targets$name[match(selected[1], targets$id)]
     
     p(class = "note", paste0(
@@ -313,24 +314,29 @@ server <- function(input, output, session) {
     ))
   })
   
-  # Rename existing sliders without resetting their current values.
-  observeEvent(list(axis_labels(), slider_setup()), {
-    labels <- axis_labels()
+  # Rename the existing sliders without resetting their values.
+  observeEvent(list(helpers$axis_labels(), slider_setup()), {
+    labels <- helpers$axis_labels()
     setup <- slider_setup()
     
-    updateSliderInput(session, setup$a_input,
-                      label = paste0(labels$a, " — selected targets"))
-    updateSliderInput(session, setup$b_input,
-                      label = paste0(labels$b, " — selected targets"))
+    updateSliderInput(
+      session, setup$a_input,
+      label = paste0(labels$a, " — selected targets")
+    )
+    updateSliderInput(
+      session, setup$b_input,
+      label = paste0(labels$b, " — selected targets")
+    )
   })
   
+  # Apply only the slider that actually changed to the selected targets.
   observe({
     setup <- slider_setup()
     new_a <- input[[setup$a_input]]
     new_b <- input[[setup$b_input]]
     req(!is.null(new_a), !is.null(new_b))
     
-    previous <- isolate(previous_slider_values())
+    previous <- isolate(state$previous_slider_values())
     
     if (is.null(previous) || previous$version != setup$version) {
       previous <- list(
@@ -342,26 +348,28 @@ server <- function(input, output, session) {
     a_changed <- !isTRUE(all.equal(new_a, previous$a))
     b_changed <- !isTRUE(all.equal(new_b, previous$b))
     
-    previous_slider_values(list(version = setup$version, a = new_a, b = new_b))
+    state$previous_slider_values(list(
+      version = setup$version, a = new_a, b = new_b
+    ))
     if (!a_changed && !b_changed) return()
     
-    targets <- isolate(person_targets())
-    selected_rows <- targets$id %in% isolate(selected_people())
+    targets <- isolate(state$person_targets())
+    selected_rows <- targets$id %in% isolate(state$selected_people())
     
     if (a_changed) targets$a[selected_rows] <- new_a
     if (b_changed) targets$b[selected_rows] <- new_b
     
-    person_targets(targets)
+    state$person_targets(targets)
   })
-  
-  # ====================================================================
-  # 5. Add, remove, reset, and switch branches
-  # ====================================================================
-  
+}
+
+
+# 5. Add, remove, reset, and switch branches
+setup_person_management <- function(input, session, state, helpers) {
   observeEvent(input$add_person, {
-    targets <- person_targets()
-    positions <- person_positions()
-    selected <- selected_people()
+    targets <- state$person_targets()
+    positions <- state$person_positions()
+    selected <- state$selected_people()
     new_id <- as.character(next_available_number(targets$id))
     
     if (nrow(targets) > 0) {
@@ -369,8 +377,8 @@ server <- function(input, output, session) {
       new_target <- targets[match(reference_id, targets$id), , drop = FALSE]
       new_position <- positions[match(reference_id, positions$id), , drop = FALSE]
     } else {
-      new_target <- initial_targets
-      new_position <- initial_positions
+      new_target <- state$initial_targets
+      new_position <- state$initial_positions
     }
     
     new_target$id <- new_id
@@ -378,66 +386,67 @@ server <- function(input, output, session) {
     new_target$color <- random_colour()
     new_position$id <- new_id
     
-    # Queue trace addition before any updates involving its new indices.
-    update_plot("addTraces", person_traces(
-      new_target, new_position, labels = axis_labels()
+    # Add traces before queuing updates that use their new indices.
+    helpers$update_plot("addTraces", person_traces(
+      new_target, new_position, labels = helpers$axis_labels()
     ))
     
     targets <- rbind(targets, new_target)
-    person_targets(targets)
-    person_positions(rbind(positions, new_position))
-    person_ids(targets$id)
+    state$person_targets(targets)
+    state$person_positions(rbind(positions, new_position))
+    state$person_ids(targets$id)
     
-    refresh_person_choices(targets, unique(c(selected, new_id)))
+    helpers$refresh_person_choices(targets, unique(c(selected, new_id)))
   })
   
   observeEvent(input$remove_people, {
-    selected <- selected_people()
+    selected <- state$selected_people()
     if (!length(selected)) {
       showNotification("Select at least one person to remove.", type = "message")
       return()
     }
     
-    targets <- person_targets()
-    positions <- person_positions()
+    targets <- state$person_targets()
+    positions <- state$person_positions()
     removed_rows <- which(targets$id %in% selected)
     if (!length(removed_rows)) return()
     
-    # Delete all three traces for each removed person. Surviving traces
-    # compact automatically, matching the order of the remaining rows.
-    removed_traces <- all_person_trace_indices(removed_rows)
-    update_plot("deleteTraces", sort(removed_traces, decreasing = TRUE))
+    # Surviving traces compact to match the remaining table rows.
+    removed_traces <- helpers$all_person_trace_indices(removed_rows)
+    helpers$update_plot("deleteTraces", sort(removed_traces, decreasing = TRUE))
     
     targets <- targets[!(targets$id %in% selected), , drop = FALSE]
     positions <- positions[!(positions$id %in% selected), , drop = FALSE]
     
-    person_targets(targets)
-    person_positions(positions)
-    person_ids(targets$id)
-    refresh_person_choices(targets, character())
+    state$person_targets(targets)
+    state$person_positions(positions)
+    state$person_ids(targets$id)
+    helpers$refresh_person_choices(targets, character())
     
-    showNotification(paste("Removed", length(removed_rows), "selected people."),
-                     type = "message")
+    showNotification(
+      paste("Removed", length(removed_rows), "selected people."),
+      type = "message"
+    )
   })
   
   observeEvent(input$reset, {
-    targets <- person_targets()
+    targets <- state$person_targets()
     if (!nrow(targets)) return()
     
     targets$a <- -1
     targets$b <- 2
-    person_targets(targets)
-    refresh_controls()
+    state$person_targets(targets)
+    helpers$refresh_controls()
   })
   
   observeEvent(input$switch_branch, {
-    selected <- selected_people()
+    selected <- state$selected_people()
     if (!length(selected)) {
       showNotification("Select at least one person first.", type = "message")
       return()
     }
     
-    positions <- person_positions()
+    positions <- state$person_positions()
     switched <- 0L
     
     for (row in which(positions$id %in% selected)) {
@@ -450,35 +459,68 @@ server <- function(input, output, session) {
       switched <- switched + 1L
     }
     
-    if (switched > 0) person_positions(positions)
+    if (switched > 0) state$person_positions(positions)
     
-    showNotification(paste("Switched", switched, "of", length(selected),
-                           "selected people."), type = "message")
+    showNotification(
+      paste("Switched", switched, "of", length(selected), "selected people."),
+      type = "message"
+    )
   })
+}
+
+
+# 6. Calculation helper for movement
+# No reactive state is needed here: the result depends only on the arguments
+# and the existing equilibrium solver / max_control_step setting.
+advance_person <- function(a, b, x, target_a, target_b, travel, distance) {
+  start <- c(a, b)
+  target <- c(target_a, target_b)
   
-  # ====================================================================
-  # 6. Movement timer
-  # ====================================================================
+  endpoint <- if (travel >= distance) {
+    target
+  } else {
+    start + (travel / distance) * (target - start)
+  }
+  
+  number_of_steps <- max(1L, as.integer(ceiling(travel / max_control_step)))
+  
+  # Intermediate equilibria are internal; only the endpoint is displayed.
+  for (step in seq_len(number_of_steps)) {
+    controls <- start + (step / number_of_steps) * (endpoint - start)
+    x <- choose_equilibrium(controls[1], controls[2], x)
+  }
+  
+  list(a = endpoint[1], b = endpoint[2], x = x)
+}
+
+
+# 7. Movement timer
+setup_movement <- function(input, session, state) {
+  # This ordinary variable belongs to this setup call / browser session.
+  # The observer's closure keeps it available after setup_movement returns.
+  previous_update_time <- Sys.time()
   
   observe({
     invalidateLater(frame_ms, session)
     
     now <- Sys.time()
-    elapsed_seconds <- as.numeric(difftime(now, previous_update_time, units = "secs"))
+    elapsed_seconds <- as.numeric(difftime(
+      now, previous_update_time, units = "secs"
+    ))
     previous_update_time <<- now
     
-    # Retain the previous app's safeguard against very large delayed steps.
+    # Retain the original safeguard against very large delayed steps.
     elapsed_seconds <- min(elapsed_seconds, 0.15)
     speed <- isolate(input$speed)
     
-    if (is.null(speed) || !is.finite(speed) || speed <= 0 || elapsed_seconds <= 0) return()
+    if (is.null(speed) || !is.finite(speed) || speed <= 0 ||
+        elapsed_seconds <= 0) return()
     
-    targets <- isolate(person_targets())
-    positions <- isolate(person_positions())
+    targets <- isolate(state$person_targets())
+    positions <- isolate(state$person_positions())
     if (!nrow(positions)) return()
     
-    # The tables share row order. Calculate distances for everyone at once,
-    # then solve equilibria ONLY for people who still need to move.
+    # Both tables share row order. Only moving people need root solving.
     difference_a <- targets$a - positions$a
     difference_b <- targets$b - positions$b
     distances <- sqrt(difference_a^2 + difference_b^2)
@@ -499,20 +541,20 @@ server <- function(input, output, session) {
       positions$x[row] <- next_position$x
     }
     
-    person_positions(positions)
+    state$person_positions(positions)
   })
-  
-  # ====================================================================
-  # 7. Position readout
-  # ====================================================================
-  
+}
+
+
+# 8. Position readout
+setup_readout <- function(output, state, helpers) {
   output$coordinates <- renderText({
-    selected <- selected_people()
+    selected <- state$selected_people()
     if (!length(selected)) return("No people selected.")
     
-    targets <- person_targets()
-    positions <- person_positions()
-    labels <- axis_labels()
+    targets <- state$person_targets()
+    positions <- state$person_positions()
+    labels <- helpers$axis_labels()
     
     blocks <- lapply(selected, function(id) {
       target_row <- match(id, targets$id)
@@ -531,11 +573,12 @@ server <- function(input, output, session) {
     
     paste(unlist(blocks), collapse = "\n\n")
   })
-  
-  # ====================================================================
-  # 8. Initial plot: rendered once
-  # ====================================================================
-  
+}
+
+
+# 9. Plot: initial scene and in-place updates
+setup_plot <- function(output, state, helpers) {
+  # No reactive reads here: construct the initial scene once.
   output$cusp <- renderPlotly({
     hover <- hover_coordinates(default_labels)
     
@@ -561,9 +604,17 @@ server <- function(input, output, session) {
         uirevision = "keep-camera", showlegend = FALSE,
         scene = list(
           uirevision = "keep-camera",
-          xaxis = list(title = list(text = default_labels$a), range = c(normal_limits[1], normal_limits[2])),
-          yaxis = list(title = list(text = default_labels$b), range = c(splitting_limits[1], splitting_limits[2])),
-          zaxis = list(title = list(text = default_labels$response), range = c(-2.6, 3)),
+          xaxis = list(
+            title = list(text = default_labels$a),
+            range = c(normal_limits[1], normal_limits[2])
+          ),
+          yaxis = list(
+            title = list(text = default_labels$b),
+            range = c(splitting_limits[1], splitting_limits[2])
+          ),
+          zaxis = list(
+            title = list(text = default_labels$response), range = c(-2.6, 3)
+          ),
           aspectmode = "manual", aspectratio = list(x = 1.25, y = 1, z = 1),
           camera = list(eye = list(x = 1.6, y = 1.6, z = 1.1))
         ),
@@ -572,18 +623,17 @@ server <- function(input, output, session) {
       config(displaylogo = FALSE)
     
     plot <- plotly_build(plot)
-    plot$x$data <- c(plot$x$data, person_traces(initial_targets, initial_positions, TRUE))
+    plot$x$data <- c(
+      plot$x$data,
+      person_traces(state$initial_targets, state$initial_positions, TRUE)
+    )
     plot
   })
   
-  # ====================================================================
-  # 9. In-place plot updates: coordinates, selection, axis labels
-  # ====================================================================
-  
-  # Selection alone does not change coordinates, so it does not trigger
-  # this observer. All intermediate surface steps remain internal.
-  observeEvent(person_positions(), {
-    positions <- person_positions()
+  # Position changes update coordinates, not the entire plot definition.
+  # Selection alone does not trigger this observer.
+  observeEvent(state$person_positions(), {
+    positions <- state$person_positions()
     if (!nrow(positions)) return()
     
     geometries <- lapply(seq_len(nrow(positions)), function(row) {
@@ -600,52 +650,75 @@ server <- function(input, output, session) {
       b <- positions$b[row]
       x <- positions$x[row]
       
-      # Explicit inner lists preserve single-point head and anchor traces.
+      # Each person contributes body, head, and foot-marker coordinates.
+      # Explicit inner lists preserve single-point coordinate arrays.
       a_values <- c(a_values, list(geometry$a, list(a), list(a)))
       b_values <- c(b_values, list(geometry$b, list(b), list(b)))
       x_values <- c(x_values, list(geometry$x, list(geometry$head_x), list(x)))
     }
     
-    update_plot(
+    helpers$update_plot(
       "restyle", list(x = a_values, y = b_values, z = x_values),
-      all_person_trace_indices(seq_len(nrow(positions)))
+      helpers$all_person_trace_indices(seq_len(nrow(positions)))
     )
   }, ignoreInit = TRUE)
   
-  observeEvent(list(selected_people(), person_ids()), {
-    ids <- person_ids()
+  # Selection changes only body thickness and head size.
+  observeEvent(list(state$selected_people(), state$person_ids()), {
+    ids <- state$person_ids()
     if (!length(ids)) return()
     
-    selected <- ids %in% selected_people()
-    bodies <- body_indices(seq_along(ids))
+    selected <- ids %in% state$selected_people()
+    bodies <- helpers$body_indices(seq_along(ids))
     
-    update_plot("restyle", list("line.width" = as.list(ifelse(selected, 8, 5))), bodies)
-    update_plot("restyle", list("marker.size" = as.list(ifelse(selected, 7, 5))), bodies + 1L)
+    helpers$update_plot(
+      "restyle", list("line.width" = as.list(ifelse(selected, 8, 5))), bodies
+    )
+    helpers$update_plot(
+      "restyle", list("marker.size" = as.list(ifelse(selected, 7, 5))),
+      bodies + 1L
+    )
   }, ignoreInit = TRUE)
   
-  observeEvent(axis_labels(), {
-    labels <- axis_labels()
+  # Axis names update the titles and hover templates in place.
+  observeEvent(helpers$axis_labels(), {
+    labels <- helpers$axis_labels()
     
-    # Fixed Plotly field names; only their visible titles are renamed.
-    update_plot("relayout", list(
+    helpers$update_plot("relayout", list(
       "scene.xaxis.title.text" = labels$a,
       "scene.yaxis.title.text" = labels$b,
       "scene.zaxis.title.text" = labels$response
     ))
     
     hover <- hover_coordinates(labels)
-    update_plot("restyle", list(hovertemplate = list(
+    helpers$update_plot("restyle", list(hovertemplate = list(
       paste0(hover, "<extra>Stable sheet</extra>"),
       paste0(hover, "<extra>Unstable sheet</extra>")
     )), c(0L, 1L))
     
-    targets <- isolate(person_targets())
+    targets <- isolate(state$person_targets())
     if (!nrow(targets)) return()
     
     templates <- lapply(targets$name, anchor_hover, labels = labels)
-    anchors <- body_indices(seq_len(nrow(targets))) + 2L
-    update_plot("restyle", list(hovertemplate = templates), anchors)
+    anchors <- helpers$body_indices(seq_len(nrow(targets))) + 2L
+    helpers$update_plot("restyle", list(hovertemplate = templates), anchors)
   }, ignoreInit = TRUE)
 }
-#----------end----------
-shinyApp(ui, server) 
+
+
+# 10. Main server: connect the components
+server <- function(input, output, session) {
+  # Create fresh state and helpers for each browser session.
+  state <- create_person_state()
+  helpers <- create_server_helpers(input, session, state)
+  
+  setup_selection(input, session, state, helpers)
+  setup_controls(input, output, session, state, helpers)
+  setup_person_management(input, session, state, helpers)
+  setup_movement(input, session, state)
+  setup_readout(output, state, helpers)
+  setup_plot(output, state, helpers)
+}
+# ----------end----------
+
+shinyApp(ui, server)

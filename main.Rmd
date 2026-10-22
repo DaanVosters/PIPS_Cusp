@@ -3,10 +3,10 @@ title: "main"
 output: html_document
 ---
 
-textttt
+...
 
 ```{r}
-#copied from example github
+#copied from example github; makes it so screen is not flooded with messages I believe
 if (!requireNamespace("knitr", quietly = TRUE)) {
   install.packages("knitr", repos = "https://cloud.r-project.org")
 }
@@ -14,12 +14,12 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 #end of copied
 
 
-source("app modules/base_model.R")
-#add other modules with source("app modules/...") here
+
+source("app_modules/base_model.R")
+source("app_modules/data_analysis_module.R")
 ```
 
-texttttt
-
+...
 
 ```{r}
 shinyApp(ui, server) #runs the app; other function used in example file though
