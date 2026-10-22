@@ -25,6 +25,32 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE) #prevents flooding of co
 source("app_modules/base_model.R")
 source("app_modules/data_analysis_module.R")
 source("app_modules/appearance_module.R")
+
+# Add appearance module
+server <- local({
+  base_server <- server
+
+  function(input, output, session) {
+    # Run the existing app logic unchanged
+    base_server(input, output, session)
+
+    # Update the existing cusp plot
+    update_plot <- function(method, ...) {
+      proxy <- plotly::plotlyProxy(
+        "cusp",
+        session,
+        deferUntilFlush = TRUE
+      )
+
+      plotly::plotlyProxyInvoke(proxy, method, ...)
+    }
+
+    appearanceServer(
+      "appearance",
+      update_plot = update_plot
+    )
+  }
+})
 ```
 
 ...
