@@ -28,6 +28,14 @@ Clone the repository using R:
 system("git clone https://github.com/DaanVosters/PIPS_Cusp.git")
 ```
 
+Install required packages using R:
+```r
+packages <- c("shiny", "plotly", "knitr", "colourpicker", "shinyjs")
+missing <- setdiff(packages, rownames(installed.packages()))
+if (length(missing)) install.packages(missing)
+?
+```
+
 Part One: main.Rmd
   - Open main.Rmd file. Click **Run App** in the top right hand corner. All scripts (base, statistic analysis, and appearance) do not need to be manually opened into R. 
 
