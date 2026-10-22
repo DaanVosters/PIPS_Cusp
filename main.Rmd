@@ -1,18 +1,25 @@
 ---
-title: "main"
+title: "Main: Interactive Cusp Catastrophe Tool"
 output: html_document
 ---
 
-...
+Our group project lets you visualize and plot data to a cusp catastrophe graph. 
+
+With this document, you can run the base visualization module, the data analysis module, and the appearance module. 
+
+
+## 1: Setup
+
+All source code is loaded from 'X', while this document exposes the high-level interfaces needed. 
 
 ```{r}
-#copied from example github; makes it so screen is not flooded with messages I believe
-if (!requireNamespace("knitr", quietly = TRUE)) {
-  install.packages("knitr", repos = "https://cloud.r-project.org")
-}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE)
-#end of copied
-
+#function copied from example repo
+invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs"), function(package) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    install.packages(package, repos = "https://cloud.r-project.org")
+  }
+}))
+knitr::opts_chunk$set(message = FALSE, warning = FALSE) #prevents flooding of console
 
 
 source("app_modules/base_model.R")

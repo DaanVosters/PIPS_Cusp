@@ -1,10 +1,14 @@
+DA_DEMO_PATH <- "app_modules/demo_data.csv"
+
 dataAnalysisUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
     shiny::hr(),
-    shiny::h3("Fit a cusp model to uploaded data"),
-    shiny::p("Upload independent observations with a continuous response. Choose numeric predictors for the normal and splitting controls. Binary responses are not supported."),
+    shiny::h3("Fit a Cusp Model to Data"),
+    shiny::p("Upload independent observations with a continuous response. Choose numeric predictors for the normal and splitting controls. Binary responses are not supported. Have fun!"),
     shiny::fileInput(ns("file"), "CSV dataset", accept = ".csv"),
+    shiny::actionButton(ns("use_demo"), "Use the Demo Dataset"),
+    shiny::p(class = "note", "This demo dataset is based on the cusp model of attitude change. The variables are: responses - attitude, normal variable - information, splitting variable - attention. For theoretical background, see van der Maas et al. (2003)."),
     shiny::p("Use commas between columns and decimal points for numbers. Missing or non-finite values in selected variables are excluded."),
     shiny::uiOutput(ns("variables")),
     shiny::actionButton(ns("fit"), "Fit cusp model", class = "btn-primary"),
@@ -17,16 +21,20 @@ dataAnalysisUI <- function(id) {
     shiny::conditionalPanel(
       condition = "input.compare", ns = ns,
       shiny::tableOutput(ns("comparison")),
-      shiny::p("Linear model: response ~ normal predictor + splitting predictor, fitted to the same standardised data. Lower AIC and BIC are better; delta is the difference from the better model. These criteria trade fit against the number of parameters. They do not prove that a catastrophe model is correct.")
+      shiny::p("Linear model: response ~ normal predictor + splitting predictor, fitted to the same standardised data. Lower AIC and BIC are better; delta is the difference from the better model. These criteria trade fit against the number of parameters.")
     ),
     shiny::checkboxInput(ns("observed"), "Show transformed observed responses", TRUE),
     shiny::checkboxInput(ns("projected"), "Show projections onto stable equilibria", TRUE),
     plotly::plotlyOutput(ns("surface"), height = "600px"),
     shiny::p("Grey dots are transformed observations and need not lie on the surface. Purple dots place each observation on its nearest stable equilibrium, keeping its estimated controls fixed. This uses the observed response to choose a branch: it is a descriptive projection, not an independent prediction or evidence of hysteresis."),
-    shiny::h4("Respondent coordinates (first 20 rows)"),
+    shiny::h4("Respondent coordinates (first 5 rows)"),
     shiny::tableOutput(ns("coordinates")),
     shiny::downloadButton(ns("download"), "Download all fitted coordinates"),
-    shiny::p("A successful fit does not prove a catastrophe model is correct. Check theory, alternative models, convergence and sensitivity to starting values. This first version fits one numeric predictor per control and uses one optimisation start.")
+    shiny::downloadButton(
+      ns("download_all"),
+      "Download all analysis results"
+    ),
+    shiny::p("A successful fit does not prove a catastrophe model is correct. The app assumes that the data-generating mechanism is a cusp, which need not be the case. A good fit shows only that the cusp describes the data well, not that it is the true mechanism. As always, check theory and consider alternative models.")
   )
 }
 
@@ -127,25 +135,39 @@ da_plot <- function(points, show_observed, show_projected, var_names, standardis
 dataAnalysisServer <- function(id) {
   shiny::moduleServer(id, function(input, output, session) {
     result <- shiny::reactiveVal(NULL)
+    data_source <- shiny::reactiveVal("upload")
     status <- shiny::reactiveVal("Upload a CSV to begin.")
     output$status <- shiny::renderText(status())
     
     uploaded <- shiny::reactive({
-      shiny::req(input$file)
-      shiny::validate(shiny::need(input$file$size <= 5 * 1024^2,
-                                  "This prototype accepts files up to 5 MB."))
-      d <- tryCatch(utils::read.csv(input$file$datapath,
-                                    stringsAsFactors = FALSE, check.names = FALSE), error = function(e) e)
-      shiny::validate(shiny::need(!inherits(d, "error"), "Unable to read this CSV."))
+      if (identical(data_source(), "demo")) {
+        shiny::validate(shiny::need(file.exists(DA_DEMO_PATH),
+                                    paste0("Demo file not found: ", DA_DEMO_PATH)))
+        d <- utils::read.csv(DA_DEMO_PATH, stringsAsFactors = FALSE, check.names = FALSE)
+      } else {
+        shiny::req(input$file)
+        shiny::validate(shiny::need(input$file$size <= 5 * 1024^2,
+                                    "This prototype accepts files up to 5 MB."))
+        d <- tryCatch(utils::read.csv(input$file$datapath,
+                                      stringsAsFactors = FALSE, check.names = FALSE), error = function(e) e)
+        shiny::validate(shiny::need(!inherits(d, "error"), "Unable to read this CSV."))
+      }
       shiny::validate(shiny::need(nrow(d) > 0, "The CSV has no data rows."),
                       shiny::need(!anyDuplicated(names(d)), "Column names must be unique."))
       d
     })
     
     shiny::observeEvent(input$file, {
+      data_source("upload")
       result(NULL)
       status("Dataset changed. Choose variables and fit again.")
     })
+    
+    shiny::observeEvent(input$use_demo, {
+      data_source("demo")
+      result(NULL)
+      status("Demo dataset loaded. Click Fit cusp model.")
+    }, ignoreInit = TRUE)
     
     output$variables <- shiny::renderUI({
       d <- uploaded()
@@ -153,13 +175,14 @@ dataAnalysisServer <- function(id) {
       shiny::validate(shiny::need(length(numeric_columns) >= 2,
                                   "Need a numeric response and at least one separate numeric predictor."))
       ns <- session$ns
+      pick <- function(name, fallback) if (name %in% numeric_columns) name else fallback
       shiny::fluidRow(
         shiny::column(4, shiny::selectInput(ns("response"), "Continuous response", numeric_columns,
-                                            selected = numeric_columns[1])),
+                                            selected = pick("attitude", numeric_columns[1]))),
         shiny::column(4, shiny::selectInput(ns("normal"), "Predictor of normal control (alpha)", numeric_columns,
-                                            selected = numeric_columns[2])),
+                                            selected = pick("information", numeric_columns[2]))),
         shiny::column(4, shiny::selectInput(ns("splitting"), "Predictor of splitting control (beta)", numeric_columns,
-                                            selected = numeric_columns[min(3, length(numeric_columns))]))
+                                            selected = pick("involvement", numeric_columns[min(3, length(numeric_columns))])))
       )
     })
     
@@ -261,8 +284,6 @@ dataAnalysisServer <- function(id) {
                       "Columns: response = ", answer$columns[1], "; alpha predictor = ",
                       answer$columns[2], "; beta predictor = ", answer$columns[3], ".\n",
                       "Input columns were standardised; estimates refer to those scaled inputs.\n",
-                      "a[...] = normal-control coefficients; b[...] = splitting-control coefficients;\n",
-                      "w[...] = response-to-canonical-state transformation coefficients.\n",
                       paste(answer$warnings, collapse = "\n")))
       }
     })
@@ -292,7 +313,7 @@ dataAnalysisServer <- function(id) {
     
     output$coordinates <- shiny::renderTable({
       shiny::req(result())
-      head(result()$coordinates, 20)
+      head(result()$coordinates, 5)
     }, digits = 3)
     
     output$download <- shiny::downloadHandler(
@@ -302,41 +323,293 @@ dataAnalysisServer <- function(id) {
         utils::write.csv(result()$coordinates, file, row.names = FALSE)
       }
     )
+    output$download_all <- shiny::downloadHandler(
+      filename = function() {
+        paste0("cusp_analysis_", Sys.Date(), ".zip")
+      },
+      content = function(file) {
+        r <- result()
+        shiny::req(r, r$comparison)
+        
+        if (!requireNamespace("zip", quietly = TRUE)) {
+          stop('Install the package in your R console: install.packages("zip")')
+        }
+        
+        # Create a temporary folder for the exported tables.
+        export_dir <- tempfile("cusp_export_")
+        dir.create(export_dir)
+        
+        # Remove the temporary folder when the download is finished.
+        on.exit(
+          unlink(export_dir, recursive = TRUE),
+          add = TRUE
+        )
+        
+        write_table <- function(table, filename) {
+          utils::write.csv(
+            table,
+            file = file.path(export_dir, filename),
+            row.names = FALSE,
+            na = ""
+          )
+        }
+        
+        # 1. Fit information.
+        metrics <- data.frame(
+          measure = c(
+            "Complete observations",
+            "Excluded rows",
+            "Package AIC",
+            "Estimated controls inside bistable region (%)"
+          ),
+          value = c(
+            nrow(r$coordinates),
+            r$excluded,
+            r$fit$aic,
+            100 * mean(r$coordinates$inside_bistable_region)
+          )
+        )
+       
+        # 2. PDF with results
+        
+        if (!requireNamespace("gridExtra", quietly = TRUE)) {
+          stop('Install the package in your R console: install.packages("gridExtra")')
+        }
+        
+        # Format numbers for the report only.
+        # The coordinates CSV keeps its underlying numerical precision.
+        format_table <- function(table) {
+          table[] <- lapply(table, function(column) {
+            if (is.numeric(column)) {
+              ifelse(
+                is.na(column),
+                "Unavailable",
+                formatC(column, format = "f", digits = 4)
+              )
+            } else {
+              as.character(column)
+            }
+          })
+          table
+        }
+        
+        estimates <- format_table(r$coefficients)
+        names(estimates) <- c(
+          "Parameter", "Estimate", "Standard error"
+        )
+        
+        fit_information <- format_table(metrics)
+        names(fit_information) <- c("Measure", "Value")
+        
+        comparison <- format_table(r$comparison)
+        names(comparison) <- c(
+          "Model", "Parameters", "AIC", "BIC",
+          "Delta AIC", "Delta BIC"
+        )
+        
+        # Show sample sizes and parameter counts as whole numbers.
+        fit_information$Value[1:2] <- as.character(metrics$value[1:2])
+        comparison$Parameters <- as.character(r$comparison$parameters)
+        
+        report_tables <- list(
+          "Parameter estimates and standard errors" = estimates,
+          "Fit information" = fit_information,
+          "Comparison with linear regression" = comparison
+        )
+        
+        notes <- c(
+          "Estimates refer to standardised inputs. Unavailable standard errors are marked.",
+          "Bistable-region membership is descriptive; it does not establish hysteresis.",
+          "Lower AIC/BIC is better. Scores are exported as calculated by the app."
+        )
+        
+        # Open one PDF and write one page
+        # Put all three report sections on one A4 portrait page.
+        grDevices::pdf(
+          file = file.path(export_dir, "analysis_report.pdf"),
+          width = 8.3,
+          height = 11.7,
+          family = "Helvetica"
+        )
+        
+        tryCatch({
+          heading <- grid::textGrob(
+            "Cusp model analysis",
+            x = 0,
+            hjust = 0,
+            gp = grid::gpar(
+              fontsize = 20,
+              fontface = "bold",
+              col = "#172033"
+            )
+          )
+          
+          subtitle <- grid::textGrob(
+            paste0(
+              "Response: ", r$columns[1],
+              "\nAlpha predictor: ", r$columns[2],
+              " | Beta predictor: ", r$columns[3],
+              "\nExported: ", Sys.Date()
+            ),
+            x = 0,
+            hjust = 0,
+            gp = grid::gpar(
+              fontsize = 10,
+              col = "#526176"
+            )
+          )
+          
+          make_section <- function(title, data) {
+            section_heading <- grid::textGrob(
+              title,
+              x = 0,
+              hjust = 0,
+              gp = grid::gpar(
+                fontsize = 13,
+                fontface = "bold",
+                col = "#172033"
+              )
+            )
+            
+            table <- gridExtra::tableGrob(
+              data,
+              rows = NULL,
+              theme = gridExtra::ttheme_minimal(
+                base_size = 9,
+                padding = grid::unit(c(3, 3), "mm"),
+                core = list(
+                  fg_params = list(col = "#172033"),
+                  bg_params = list(
+                    fill = c("#f1f5f9", "#ffffff"),
+                    col = NA
+                  )
+                ),
+                colhead = list(
+                  fg_params = list(
+                    col = "#ffffff",
+                    fontface = "bold"
+                  ),
+                  bg_params = list(
+                    fill = "#334155",
+                    col = NA
+                  )
+                )
+              )
+            )
+            
+            gridExtra::arrangeGrob(
+              section_heading,
+              table,
+              ncol = 1,
+              heights = grid::unit.c(
+                grid::unit(9, "mm"),
+                sum(table$heights)
+              )
+            )
+          }
+          
+          sections <- lapply(
+            seq_along(report_tables),
+            function(i) {
+              make_section(
+                names(report_tables)[i],
+                report_tables[[i]]
+              )
+            }
+          )
+          
+          footer <- grid::textGrob(
+            paste(
+              "Estimates refer to standardised inputs.",
+              "Unavailable standard errors are marked.",
+              "Lower AIC/BIC is better; values are exported as calculated by the app.",
+              "Bistable-region membership does not establish hysteresis.",
+              sep = "\n"
+            ),
+            x = 0,
+            hjust = 0,
+            gp = grid::gpar(
+              fontsize = 9,
+              col = "#526176"
+            )
+          )
+          
+          page <- gridExtra::arrangeGrob(
+            heading,
+            subtitle,
+            sections[[1]],
+            sections[[2]],
+            sections[[3]],
+            footer,
+            ncol = 1,
+            heights = c(0.07, 0.10, 0.29, 0.23, 0.20, 0.11)
+          )
+          
+          grid::grid.newpage()
+          grid::pushViewport(
+            grid::viewport(width = 0.90, height = 0.92)
+          )
+          grid::grid.draw(page)
+          grid::popViewport()
+        }, finally = {
+          grDevices::dev.off()
+        })
+        
+        # 3. All fitted respondent coordinates.
+        write_table(
+          r$coordinates,
+          "respondent_coordinates.csv"
+        )
+        
+        # Bundle the four files into a ZIP.
+        zip::zipr(
+          zipfile = file,
+          files = list.files(export_dir),
+          root = export_dir
+        )
+      }
+    )
     invisible(result)
   })
 }
 
-
+                                
 #----------base-model update part----------
 #re-load ui
 ui <- fluidPage(
   tags$head(tags$style(HTML("body { background: #f8fafc; color: #172033; }
     .well { background: white; border-color: #e2e8f0; }
     .note { color: #526176; font-size: 13px; }"))),
-  titlePanel("People on a cusp catastrophe"),
+  titlePanel("Interactive Cusp Catastrophe Tool: Visualisation & Data-Analysis"),
   sidebarLayout(
     sidebarPanel(
-      selectInput("person", "People to move", choices = c("Person 1" = "1"), selected = "1", multiple = TRUE),
-      actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
+      selectInput(
+        "person", "Person to move",
+        choices = c("Select a person" = "", "Person 1" = "1"),
+        selected = "1", multiple = FALSE
+      ),
       uiOutput("controls"), uiOutput("selection_note"),
       actionButton("add_person", "Add person"),
-      actionButton("remove_people", "Remove selected people", class = "btn-danger"),
-      p(class = "note", "Remove deletes everyone selected. New people reuse the lowest available number. If everyone is removed, the next person is Person 1."),
+      actionButton("remove_people", "Remove selected person", class = "btn-danger"),
+      p(class = "note", "Removing a person permanently deletes them from the plot and list. Switching selection does not delete anyone. New people are assigned the lowest available number."),
       actionButton("reset", "Reset everyone's controls"), hr(),
       numericInput("speed", "Control movement speed (units / second)", value = 1, min = 0.1, max = 5, step = 0.1),
-      p(class = "note", "Sliders set targets for everyone selected. Current controls approach their targets in small increments, solving the equilibrium each time. Speed is constant in the control plane, not along the curved surface."),
-      strong("Selected people's positions"), verbatimTextOutput("coordinates"),
-      actionButton("switch_branch", "Switch selected people's branches"),
-      p(class = "note", "Switching acts at each person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
+      strong("Selected person's position"), verbatimTextOutput("coordinates"),
+      actionButton("switch_branch", "Switch selected person's branch"),
+      p(class = "note", "Switching acts at the selected person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
       strong("Rename axes"),
       textInput("axis_normal", "Normal-control axis name", default_labels$a),
       textInput("axis_splitting", "Splitting-control axis name", default_labels$b),
       textInput("axis_response", "Behavioural axis name", default_labels$response),
-      p(class = "note", "Names update automatically. Blank names use defaults. Renaming changes labels only, not mathematics or camera."), hr(),
-      p("Blue: stable equilibria. Orange: unstable equilibria. Dark curves: folds."),
-      p(class = "note", "The central foot marker follows the surface; the figure is decorative. At a fold each person jumps directly to the other stable branch, retaining their own branch history."),
-      p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Deselecting does not cancel motion toward an assigned target."),
-      p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
+      p(class = "note", "Use this option to make your theory-driven visualisations easier to interpret. Changing names only changes the labels."), hr(),
+      h4("We need to talk about the cusp…"),
+      p(class = "note", "The surface of the cusp is divided into two sections: stable and unstable equilibria (in different colours). The latter is also referred to as the inaccessible region as people can only occupy these positions momentarily. The dark lines mark the fold."),
+      p(class = "note", "At a fold each person jumps directly to the other stable branch. We hope that this app helps you visualise psychological phenomena whose dynamics theory implies is cusp-like. One such example is the cusp model of attitudes (van der Maas et al., 2003)."),
+      strong("Reference"),
+      p(class = "note", "van der Maas, H. L. J., Kolstein, R., & van der Pligt, J. (2003). Sudden transitions in attitudes. ",
+        tags$em("Sociological Methods & Research, 32"), "(2), 125–152. ",
+        tags$a(href = "https://doi.org/10.1177/0049124103253773",
+               "https://doi.org/10.1177/0049124103253773", target = "_blank"))),
     mainPanel(plotlyOutput("cusp", height = "720px"),
               p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."),
               dataAnalysisUI("analysis"))))
@@ -344,6 +617,7 @@ ui <- fluidPage(
 
 #re-load server function with new data-analysis piece
 server <- function(input, output, session) {
+  # Create fresh state and helpers for each browser session.
   state <- create_person_state()
   helpers <- create_server_helpers(input, session, state)
   

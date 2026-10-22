@@ -14,30 +14,36 @@ ui <- fluidPage(
   tags$head(tags$style(HTML("body { background: #f8fafc; color: #172033; }
     .well { background: white; border-color: #e2e8f0; }
     .note { color: #526176; font-size: 13px; }"))),
-  titlePanel("People on a cusp catastrophe"),
+  titlePanel("Interactive Cusp Catastrophe Tool: Visualisation & Data-Analysis"),
   sidebarLayout(
     sidebarPanel(
-      selectInput("person", "People to move", choices = c("Person 1" = "1"), selected = "1", multiple = TRUE),
-      actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
+      selectInput(
+        "person", "Person to move",
+        choices = c("Select a person" = "", "Person 1" = "1"),
+        selected = "1", multiple = FALSE
+      ),
       uiOutput("controls"), uiOutput("selection_note"),
       actionButton("add_person", "Add person"),
-      actionButton("remove_people", "Remove selected people", class = "btn-danger"),
-      p(class = "note", "Remove deletes everyone selected. New people reuse the lowest available number. If everyone is removed, the next person is Person 1."),
+      actionButton("remove_people", "Remove selected person", class = "btn-danger"),
+      p(class = "note", "Removing a person permanently deletes them from the plot and list. Switching selection does not delete anyone. New people are assigned the lowest available number."),
       actionButton("reset", "Reset everyone's controls"), hr(),
       numericInput("speed", "Control movement speed (units / second)", value = 1, min = 0.1, max = 5, step = 0.1),
-      p(class = "note", "Sliders set targets for everyone selected. Current controls approach their targets in small increments, solving the equilibrium each time. Speed is constant in the control plane, not along the curved surface."),
-      strong("Selected people's positions"), verbatimTextOutput("coordinates"),
-      actionButton("switch_branch", "Switch selected people's branches"),
-      p(class = "note", "Switching acts at each person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
+      strong("Selected person's position"), verbatimTextOutput("coordinates"),
+      actionButton("switch_branch", "Switch selected person's branch"),
+      p(class = "note", "Switching acts at the selected person's current controls when two stable equilibria exist. Other people remain unchanged."), hr(),
       strong("Rename axes"),
       textInput("axis_normal", "Normal-control axis name", default_labels$a),
       textInput("axis_splitting", "Splitting-control axis name", default_labels$b),
       textInput("axis_response", "Behavioural axis name", default_labels$response),
-      p(class = "note", "Names update automatically. Blank names use defaults. Renaming changes labels only, not mathematics or camera."), hr(),
-      p("Blue: stable equilibria. Orange: unstable equilibria. Dark curves: folds."),
-      p(class = "note", "The central foot marker follows the surface; the figure is decorative. At a fold each person jumps directly to the other stable branch, retaining their own branch history."),
-      p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Deselecting does not cancel motion toward an assigned target."),
-      p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
+      p(class = "note", "Use this option to make your theory-driven visualisations easier to interpret. Changing names only changes the labels."), hr(),
+      h4("We need to talk about the cusp…"),
+      p(class = "note", "The surface of the cusp is divided into two sections: stable and unstable equilibria (in different colours). The latter is also referred to as the inaccessible region as people can only occupy these positions momentarily. The dark lines mark the fold."),
+      p(class = "note", "At a fold each person jumps directly to the other stable branch. We hope that this app helps you visualise psychological phenomena whose dynamics theory implies is cusp-like. One such example is the cusp model of attitudes (van der Maas et al., 2003)."),
+      strong("Reference"),
+      p(class = "note", "van der Maas, H. L. J., Kolstein, R., & van der Pligt, J. (2003). Sudden transitions in attitudes. ",
+        tags$em("Sociological Methods & Research, 32"), "(2), 125–152. ",
+        tags$a(href = "https://doi.org/10.1177/0049124103253773",
+               "https://doi.org/10.1177/0049124103253773", target = "_blank"))),
     mainPanel(plotlyOutput("cusp", height = "720px"),
               p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."))))
 #----------end----------
@@ -73,6 +79,24 @@ choose_equilibrium <- function(a, b, previous_x) {
   roots <- real_roots(a, b)
   candidates <- roots[3*roots^2-b >= -1e-7] #if second derivative at roots is bigger than 0...; slightly negative to allow for rounding error according to AI.
   return(candidates[which.min(abs(candidates - previous_x))])
+}
+
+# Random starting point for a new person: random controls inside the slider
+# limits, placed on a randomly chosen stable branch.
+random_start <- function() {
+  for (attempt in seq_len(100L)) {
+    a <- round(runif(1, normal_limits[1], normal_limits[2]), 2)
+    b <- round(runif(1, splitting_limits[1], splitting_limits[2]), 2)
+    roots <- real_roots(a, b)
+    stable <- roots[3 * roots^2 - b > 1e-7]
+    
+    if (length(stable)) {
+      x <- stable[sample.int(length(stable), 1L)]
+      return(list(a = a, b = b, x = x))
+    }
+  }
+  
+  stop("Could not generate a stable random starting point.")
 }
 
 #for drawing 3d persons
@@ -189,9 +213,13 @@ create_server_helpers <- function(input, session, state) {
   }
   
   refresh_person_choices <- function(targets, selected) {
+    selected <- as.character(selected)
+    selected <- selected[selected %in% targets$id]
+    
     updateSelectInput(
       session, "person",
-      choices = person_choices(targets), selected = selected
+      choices = c("Select a person" = "", person_choices(targets)),
+      selected = if (length(selected)) selected[1] else ""
     )
   }
   
@@ -238,48 +266,43 @@ setup_selection <- function(input, session, state, helpers) {
     requested_ids <- as.character(input$person)
     valid_ids <- requested_ids[requested_ids %in% state$person_ids()]
     
+    if (length(valid_ids) > 1L) {
+      valid_ids <- valid_ids[1]
+    }
+    
     if (!identical(valid_ids, state$selected_people())) {
       state$selected_people(valid_ids)
       helpers$refresh_controls()
     }
   }, priority = 100)
-  
-  observeEvent(input$select_all, {
-    selected <- as.character(sort(as.integer(state$person_ids())))
-    updateSelectInput(session, "person", selected = selected)
-  })
-  
-  observeEvent(input$select_none, {
-    updateSelectInput(session, "person", selected = character())
-  })
 }
 
 
 # 4. Shared sliders
 setup_controls <- function(input, output, session, state, helpers) {
   # Loading slider values after selection/reset must not change targets.
-  # isolate() prevents target edits from rebuilding these sliders.
+  # isolate() prevents position updates from rebuilding these sliders.
   slider_setup <- reactive({
     selected <- state$selected_people()
     version <- state$controls_version()
-    req(length(selected) > 0)
+    req(length(selected) == 1L)
     
-    targets <- isolate(state$person_targets())
-    reference_row <- match(selected[1], targets$id)
+    positions <- isolate(state$person_positions())
+    reference_row <- match(selected[1], positions$id)
     req(!is.na(reference_row))
     
     list(
       version = version,
       a_input = paste0("normal_", version),
       b_input = paste0("splitting_", version),
-      initial_a = targets$a[reference_row],
-      initial_b = targets$b[reference_row]
+      initial_a = round(positions$a[reference_row], 2),
+      initial_b = round(positions$b[reference_row], 2)
     )
   })
   
   output$controls <- renderUI({
     if (!length(state$selected_people())) {
-      return(p("Select at least one person to show the sliders."))
+      return(p("Select a person to show the sliders."))
     }
     
     setup <- slider_setup()
@@ -287,12 +310,12 @@ setup_controls <- function(input, output, session, state, helpers) {
     
     tagList(
       sliderInput(
-        setup$a_input, paste0(labels$a, " — selected targets"),
+        setup$a_input, paste0(labels$a, " — set target"),
         min = normal_limits[1], max = normal_limits[2],
         value = setup$initial_a, step = 0.01
       ),
       sliderInput(
-        setup$b_input, paste0(labels$b, " — selected targets"),
+        setup$b_input, paste0(labels$b, " — set target"),
         min = splitting_limits[1], max = splitting_limits[2],
         value = setup$initial_b, step = 0.01
       )
@@ -307,10 +330,9 @@ setup_controls <- function(input, output, session, state, helpers) {
     reference_name <- targets$name[match(selected[1], targets$id)]
     
     p(class = "note", paste0(
-      length(selected), " selected. On selection, sliders load ",
-      reference_name, "'s targets. Moving one slider assigns its value to ",
-      "everyone selected; their other target remains unchanged. ",
-      "Selection alone never moves people."
+      reference_name, " is selected. Their position is displayed on the sliders, ",
+      "rounded to 0.01. Using the sliders, you can move the selected person ",
+      "along the cusp."
     ))
   })
   
@@ -321,11 +343,11 @@ setup_controls <- function(input, output, session, state, helpers) {
     
     updateSliderInput(
       session, setup$a_input,
-      label = paste0(labels$a, " — selected targets")
+      label = paste0(labels$a, " — set target")
     )
     updateSliderInput(
       session, setup$b_input,
-      label = paste0(labels$b, " — selected targets")
+      label = paste0(labels$b, " — set target")
     )
   })
   
@@ -369,26 +391,29 @@ setup_person_management <- function(input, session, state, helpers) {
   observeEvent(input$add_person, {
     targets <- state$person_targets()
     positions <- state$person_positions()
-    selected <- state$selected_people()
     new_id <- as.character(next_available_number(targets$id))
     
-    if (nrow(targets) > 0) {
-      reference_id <- if (length(selected)) selected[1] else targets$id[1]
-      new_target <- targets[match(reference_id, targets$id), , drop = FALSE]
-      new_position <- positions[match(reference_id, positions$id), , drop = FALSE]
-    } else {
-      new_target <- state$initial_targets
-      new_position <- state$initial_positions
-    }
-    
-    new_target$id <- new_id
-    new_target$name <- paste("Person", new_id)
-    new_target$color <- random_colour()
-    new_position$id <- new_id
+    start <- random_start()
+    new_target <- data.frame(
+      id = new_id,
+      name = paste("Person", new_id),
+      a = start$a,
+      b = start$b,
+      color = random_colour(),
+      stringsAsFactors = FALSE
+    )
+    new_position <- data.frame(
+      id = new_id,
+      a = start$a,
+      b = start$b,
+      x = start$x,
+      stringsAsFactors = FALSE
+    )
     
     # Add traces before queuing updates that use their new indices.
     helpers$update_plot("addTraces", person_traces(
-      new_target, new_position, labels = helpers$axis_labels()
+      new_target, new_position, selected = TRUE,
+      labels = helpers$axis_labels()
     ))
     
     targets <- rbind(targets, new_target)
@@ -396,13 +421,13 @@ setup_person_management <- function(input, session, state, helpers) {
     state$person_positions(rbind(positions, new_position))
     state$person_ids(targets$id)
     
-    helpers$refresh_person_choices(targets, unique(c(selected, new_id)))
+    helpers$refresh_person_choices(targets, new_id)
   })
   
   observeEvent(input$remove_people, {
     selected <- state$selected_people()
     if (!length(selected)) {
-      showNotification("Select at least one person to remove.", type = "message")
+      showNotification("Select a person to remove.", type = "message")
       return()
     }
     
@@ -423,10 +448,7 @@ setup_person_management <- function(input, session, state, helpers) {
     state$person_ids(targets$id)
     helpers$refresh_person_choices(targets, character())
     
-    showNotification(
-      paste("Removed", length(removed_rows), "selected people."),
-      type = "message"
-    )
+    showNotification("Removed the selected person.", type = "message")
   })
   
   observeEvent(input$reset, {
@@ -442,7 +464,7 @@ setup_person_management <- function(input, session, state, helpers) {
   observeEvent(input$switch_branch, {
     selected <- state$selected_people()
     if (!length(selected)) {
-      showNotification("Select at least one person first.", type = "message")
+      showNotification("Select a person first.", type = "message")
       return()
     }
     
@@ -462,7 +484,8 @@ setup_person_management <- function(input, session, state, helpers) {
     if (switched > 0) state$person_positions(positions)
     
     showNotification(
-      paste("Switched", switched, "of", length(selected), "selected people."),
+      if (switched > 0) "Switched the selected person's branch."
+      else "No second stable branch at this location, so nothing changed.",
       type = "message"
     )
   })
@@ -563,10 +586,8 @@ setup_readout <- function(output, state, helpers) {
       
       paste0(
         targets$name[target_row], "\n",
-        labels$a, ": ", sprintf("%.3f", positions$a[position_row]),
-        " (target ", sprintf("%.2f", targets$a[target_row]), ")\n",
-        labels$b, ": ", sprintf("%.3f", positions$b[position_row]),
-        " (target ", sprintf("%.2f", targets$b[target_row]), ")\n",
+        labels$a, ": ", sprintf("%.3f", positions$a[position_row]), "\n",
+        labels$b, ": ", sprintf("%.3f", positions$b[position_row]), "\n",
         labels$response, ": ", sprintf("%.3f", positions$x[position_row])
       )
     })
