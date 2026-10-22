@@ -14,47 +14,16 @@ All source code is loaded from 'X', while this document exposes the high-level i
 
 ```{r}
 #function copied from example repo
-invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs"), function(package) {
+invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs", "zip", "gridExtra", "cusp"), function(package) {
   if (!requireNamespace(package, quietly = TRUE)) {
     install.packages(package, repos = "https://cloud.r-project.org")
   }
 }))
 knitr::opts_chunk$set(message = FALSE, warning = FALSE) #prevents flooding of console
 
-
+source("app_modules/base_model.R")
 source("app_modules/data_analysis_module.R")
 source("app_modules/appearance_module.R")
-source("app_modules/base_model.R")
 
-# Add appearance module
-server <- local({
-  base_server <- server
-
-  function(input, output, session) {
-    # Run the existing app logic unchanged
-    base_server(input, output, session)
-
-    # Update the existing cusp plot
-    update_plot <- function(method, ...) {
-      proxy <- plotly::plotlyProxy(
-        "cusp",
-        session,
-        deferUntilFlush = TRUE
-      )
-
-      plotly::plotlyProxyInvoke(proxy, method, ...)
-    }
-
-    appearanceServer(
-      "appearance",
-      update_plot = update_plot
-    )
-  }
-})
-```
-
-...
-
-```{r}
-shinyApp(ui, server) #runs the app; other function used in example file though
+shinyApp(ui, server) #runs the app
 ```
