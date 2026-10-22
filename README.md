@@ -12,6 +12,7 @@ PIPS_Cusp/                      #Repository Root
 │   ├── appearance_module.R     #Contains code for the appearance module
 │   ├── base_model.R            #Contains code for the base visualization module 
 │   ├── data_analysis_module.R  #Contains code for the statistical analysis module
+├──  data/
 │   └── demo_data.csv           #Simulated dataset based on the Attitude Cusp Model used for the app and analysis
 ├── .gitignore                  #Files excluded from Github
 ├── README.md                   #Project documentation: About and Installation
@@ -33,17 +34,8 @@ install.packages(c("shiny", "plotly", "knitr", "colourpicker", "shinyjs"))
 ```
 
 
-- Open main.Rmd
-  - You can either run this in one or two chunks
-
-Part One: Base Model
-- Open base_model.R. Click **Run App** in the top right hand corner.
-
-Part Two: Data Analysis
-- Open data_analysis_module.R.
-
-Part Three: Appearance
-- Open appearance_module.R. 
+Part One: main.Rmd
+  - Open main.Rmd file. Click **Run App** in the top right hand corner. All scripts (base, statistic analysis, and appearance) do not need to be manually opened into R. 
 
 
 ### Visualisation Feature
