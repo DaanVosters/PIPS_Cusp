@@ -19,7 +19,7 @@ PIPS_Cusp/                      #Repository Root
 ```
 
 ### Requirements for Running Our Main Deliverable
-You need an internet connection to install packages. You need R and RStudio downloaded on your computer. 
+You need an internet connection to install packages. You need R and RStudio downloaded on your computer. EDIT SO WE CAN PULL
 
 Clone the repository using R:
 
