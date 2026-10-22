@@ -1,10 +1,16 @@
 ---
-title: "main"
+title: "Main: Interactive Cusp Catastrophe Tool"
 output: html_document
 ---
 
-text to be added
+Our group project lets you visualize and plot data to a cusp catastrophe graph. 
 
+With this document, you can run the base visualization module, the data analysis module, and the appearance module. 
+
+
+## 1: Setup
+
+All source code is loaded from 'X', while this document exposes the high-level interfaces needed. 
 
 ```{r}
 #function copied from example repo
