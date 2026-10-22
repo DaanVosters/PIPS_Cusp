@@ -6,32 +6,40 @@ appearanceUI <- function(id) {
   shiny::tagList(
     appearanceStyles(),
     
-    shiny::strong("Appearance"),
-    
-    shiny::checkboxInput(
-      ns("dark_mode"),
-      "Dark mode",
-      value = FALSE
-    ),
-    
-    colourpicker::colourInput(
-      ns("stable_colour"),
-      "Stable equilibria color",
-      value = "#93c5fd",
-      allowTransparent = FALSE
-    ),
-    
-    colourpicker::colourInput(
-      ns("unstable_colour"),
-      "Unstable equilibria color",
-      value = "#fdba74",
-      allowTransparent = FALSE
+    shiny::fluidRow(
+      shiny::column(
+        width = 4,
+        shiny::checkboxInput(
+          ns("dark_mode"),
+          "Dark mode",
+          value = FALSE
+        )
+      ),
+      
+      shiny::column(
+        width = 4,
+        colourpicker::colourInput(
+          ns("stable_colour"),
+          "Stable equilibria color",
+          value = "#93c5fd",
+          allowTransparent = FALSE
+        )
+      ),
+      
+      shiny::column(
+        width = 4,
+        colourpicker::colourInput(
+          ns("unstable_colour"),
+          "Unstable equilibria color",
+          value = "#fdba74",
+          allowTransparent = FALSE
+        )
+      )
     ),
     
     shiny::hr()
   )
 }
-
 
 appearanceServer <- function(
     id,
@@ -247,7 +255,6 @@ ui <- fluidPage(
   titlePanel("People on a cusp catastrophe"),
   sidebarLayout(
     sidebarPanel(
-      appearanceUI("appearance"),
       selectInput("person", "People to move", choices = c("Person 1" = "1"), selected = "1", multiple = TRUE),
       actionButton("select_all", "Select all"), actionButton("select_none", "Select none"),
       uiOutput("controls"), uiOutput("selection_note"),
@@ -269,7 +276,9 @@ ui <- fluidPage(
       p(class = "note", "The central foot marker follows the surface; the figure is decorative. At a fold each person jumps directly to the other stable branch, retaining their own branch history."),
       p(class = "note", "Drag the plot to rotate; scroll to zoom. Adding/removing people preserves the camera. Colours are random. Deselecting does not cancel motion toward an assigned target."),
       p(class = "note", "For hysteresis, set splitting to 2, then normal to 2. Let people arrive, then return normal to -2.")),
-    mainPanel(plotlyOutput("cusp", height = "720px"),
+    mainPanel(
+      appearanceUI("appearance"),
+      plotlyOutput("cusp", height = "720px"),
               p(class = "note", "Model: V(x; a, b) = x⁴/4 − bx²/2 − ax. Equilibrium: x³ − bx − a = 0. Stability: 3x² − b > 0. Motion uses quasi-static stable-branch continuation, not physical time-domain dynamics."),
               dataAnalysisUI("analysis"))))
 #end
