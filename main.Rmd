@@ -22,9 +22,9 @@ invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs"), funct
 knitr::opts_chunk$set(message = FALSE, warning = FALSE) #prevents flooding of console
 
 
-source("app_modules/base_model.R")
 source("app_modules/data_analysis_module.R")
 source("app_modules/appearance_module.R")
+source("app_modules/base_model.R")
 
 # Add appearance module
 server <- local({
