@@ -12,7 +12,7 @@ PIPS_Cusp/                      #Repository Root
 │   ├── appearance_module.R     #Contains code for the appearance module
 │   ├── base_model.R            #Contains code for the base visualization module 
 │   ├── data_analysis_module.R  #Contains code for the statistical analysis module
-├──  data/
+├── data/
 │   └── demo_data.csv           #Simulated dataset based on the Attitude Cusp Model used for the app and analysis
 ├── .gitignore                  #Files excluded from Github
 ├── README.md                   #Project documentation: About and Installation
