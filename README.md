@@ -19,7 +19,7 @@ PIPS_Cusp/                      #Repository Root
 ```
 
 ### Requirements for Running Our Main Deliverable
-You need an internet connection to install packages. You need R and RStudio downloaded on your computer. EDIT SO WE CAN PULL
+You need an internet connection to install packages. You need R and RStudio downloaded on your computer. 
 
 Clone the repository using R:
 
@@ -27,11 +27,17 @@ Clone the repository using R:
 system("git clone https://github.com/DaanVosters/PIPS_Cusp.git")
 ```
 
+Install required packages using R:
+```r
+install.packages(c("shiny", "plotly"))
+```
+
+
 - Open main.Rmd
-  - Any additional comments regarding this folder go here
+  - You can either run this in one or two chunks
 
 Part One: Base Model
-- Open base_model.R. Click **Run App** in the top righthand corner.
+- Open base_model.R. Click **Run App** in the top right hand corner.
 
 Part Two: Data Analysis
 - Open data_analysis_module.R.
@@ -50,7 +56,7 @@ The data analysis module, located under the main graph when loaded, enables user
 
 After the model is fit, parameter estimates and the fit information is displayed. Optionally, the fit of the cusp model can be compared to linear regression using Akaike Information Criterion (AIC) and Bayesian Information Criterion (BIC). Fitted coordinates and analysis results can easily be downloaded using the buttons at the bottom. A 3D cusp graph is also created, to which all datapoints are added. Black dots show the true locations of the datapoints (possibly standardised), and a purple dot corresponding to each black dot shows the closest projection onto the cusp, since datapoints need not lie perfectly on the cusp. Some aid in interpretation is also provided in the notes displayed under graphs and buttons.
 
-### Aesthetics Feature
+### Appearance Feature
 At the top of the app, above the main 3D graph, users also have the option to change to dark mode or adjust the colours of the different features of the graph. This may prove useful for colourblind users, but we encourage everyone to have fun with some pretty colours. Who said statistics isn't fun?
 
 ## Collaborators
