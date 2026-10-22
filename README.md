@@ -29,7 +29,7 @@ system("git clone https://github.com/DaanVosters/PIPS_Cusp.git")
 
 Install required packages using R:
 ```r
-install.packages(c("shiny", "plotly"))
+install.packages(c("shiny", "plotly", "knitr", "colourpicker", "shinyjs"))
 ```
 
 
