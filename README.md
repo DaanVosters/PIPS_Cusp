@@ -1,4 +1,4 @@
-# PIPS_Cusp
+# Interactive Cusp Catastrophe Tool: Visualisation & Data-Analysis
 Repository for working on the Cusp model app, during the PIPS course.
 Due date: Thursday, 22 October 2026, at 17.00
 
