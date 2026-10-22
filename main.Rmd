@@ -19,10 +19,11 @@ invisible(lapply(c("knitr", "shiny", "plotly", "colourpicker", "shinyjs"), funct
     install.packages(package, repos = "https://cloud.r-project.org")
   }
 }))
-
+knitr::opts_chunk$set(message = FALSE, warning = FALSE) #prevents flooding of console
 
 
 source("app_modules/base_model.R")
 source("app_modules/data_analysis_module.R")
-shinyApp(ui, server)#runs the app
+source("app_modules/appearance_module.R")
+shinyApp(ui, server) #runs the app
 ```
