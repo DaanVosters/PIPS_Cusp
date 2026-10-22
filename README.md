@@ -29,7 +29,7 @@ system("git clone https://github.com/DaanVosters/PIPS_Cusp.git")
 ```
 
 Part One: main.Rmd
-  - Open main.Rmd file. **Hover run and click run current chunk** in the top right hand corner. The main.Rmd is the only file you need to open.
+  - Open main.Rmd file. **Hover run and click run next chunk** in the top right hand corner. The main.Rmd is the only file you need to open.
 
 
 ### Visualisation Feature
