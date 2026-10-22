@@ -27,7 +27,17 @@ Clone the repository using R:
 system("git clone https://github.com/DaanVosters/PIPS_Cusp.git")
 ```
 
-- Open 
+- Open main.Rmd
+  - Any additional comments regarding this folder go here
+
+Part One: Base Model
+- Open base_model.R. Click **Run App** in the top righthand corner.
+
+Part Two: Data Analysis
+- Open data_analysis_module.R.
+
+Part Three: Appearance
+- Open appearance_module.R. 
 
 
 ### Visualisation Feature
