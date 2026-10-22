@@ -18,7 +18,7 @@ After the model is fit, parameter estimates and the fit information is displayed
 At the top of the app, above the main 3D graph, users also have the option to change to dark mode or adjust the colours of the different features of the graph. This may prove useful for colourblind users, but we encourage everyone to have fun with some pretty colours. Who said statistics isn't fun?
 
 ## Collaborators
-This project was completed by Daan Vosters, Madeleine Limon, and Virág Nyisztor
+This project was completed by Daan Vosters, Madeleine Limon, and Virág Nyisztor, with the use of Miss UvA AI Chat
 
 ## Reference
 van der Maas, H. L. J., Kolstein, R., & van der Pligt, J. (2003). Sudden transitions in attitudes. *Sociological Methods & Research, 32*(2), 125–152. https://doi.org/10.1177/0049124103253773
